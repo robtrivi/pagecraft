@@ -1,0 +1,5 @@
+coverage.out
+*.pdf
+/bin/
+/dist/
+.DS_Store
