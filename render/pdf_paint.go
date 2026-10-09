@@ -295,6 +295,8 @@ func drawListMarker(sb *strings.Builder, shape string, cx, cy, fontSize, r, g, b
 
 // drawRuns draws inline runs, each with its own style.
 func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex map[*images.Raster]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, gs map[float64]int) {
+	var lastOpaqueFill [3]float64
+	hasLastOpaqueFill := false
 	if b.LetterSpacing != 0 {
 		fmt.Fprintf(sb, "%g Tc\n", b.LetterSpacing)
 	}
@@ -307,6 +309,8 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 				drawBackground(sb, decoration, pageH, gs)
 			}
 		}
+		// Inline decorations may change the fill color before this line's text.
+		hasLastOpaqueFill = false
 		for _, r := range ln {
 			if r.Image != nil {
 				pdfY := pageH - r.Y - r.ImageHeight
@@ -326,10 +330,13 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 				cr, cg, cb = r.Color[0], r.Color[1], r.Color[2]
 			}
 			withAlpha(sb, r.Alpha, gs, func() {
-				if r.HasColor {
+				fill := [3]float64{cr, cg, cb}
+				if r.Alpha < 1 || !hasLastOpaqueFill || fill != lastOpaqueFill {
 					fmt.Fprintf(sb, "%g %g %g rg\n", cr, cg, cb)
-				} else {
-					sb.WriteString("0 0 0 rg\n")
+				}
+				if r.Alpha >= 1 {
+					lastOpaqueFill = fill
+					hasLastOpaqueFill = true
 				}
 				if r.Font != nil && len(r.Shaped.Glyphs) > 0 {
 					fmt.Fprintf(sb, "BT /%s %g Tf", fname, r.FontSize)

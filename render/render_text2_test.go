@@ -18,3 +18,17 @@ func TestRender_DrawsSizedColoredText(t *testing.T) {
 		}
 	}
 }
+
+func TestRender_ReusesOpaqueTextFillColor(t *testing.T) {
+	got, err := RenderHTMLToPDF(`<p><span style="color: red">one</span><span style="color: red">two</span></p>`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	content := streamText(t, got)
+	if count := strings.Count(content, "1 0 0 rg"); count != 1 {
+		t.Fatalf("red fill color operators = %d, want 1", count)
+	}
+	if !strings.Contains(content, "(one)") || !strings.Contains(content, "(two)") {
+		t.Fatalf("both paragraph fragments must remain in the content stream: %q", content)
+	}
+}
