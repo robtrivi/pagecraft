@@ -92,7 +92,7 @@ func main() {
 
 Pagecraft supports HTML stylesheets and inline styles, physical page sizes and margins through `@page`, page footers with page counters, text wrapping, lists, tables, floats, flexbox, grid, and multi-page layout. It can render borders, backgrounds, common typography, PNG and JPEG images, SVG graphics, links, metadata, and TrueType fonts declared with `@font-face`.
 
-Pagecraft implements a document-focused CSS subset, not a browser. Unsupported CSS may be ignored or render differently from Chromium. The [`examples/`](examples/) directory has complete HTML and PDF pairs for an [invoice](examples/invoice.html), an [operations report](examples/operations-report.html), a [product catalog](examples/product-catalog.html), and a [shipping label](examples/shipping-label.html).
+Pagecraft implements a document-focused CSS subset, not a browser. Unsupported CSS may be ignored or render differently from Chromium. The [`examples/`](examples/) directory has complete HTML and PDF pairs for an [invoice](examples/invoice.html), an [operations report](examples/operations-report.html), a [product catalog](examples/product-catalog.html), a [shipping label](examples/shipping-label.html), and a [regional expansion plan with landscape appendices](examples/regional-expansion-plan.html).
 
 ## Development
 
