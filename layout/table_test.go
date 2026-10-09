@@ -1055,3 +1055,94 @@ func TestLayout_TableMarginsCollapseWithAdjacentBlocks(t *testing.T) {
 		t.Errorf("cell y=%v, want %v when collapsing margin-bottom 8pt and margin-top 12pt", cell.Y, want)
 	}
 }
+
+func TestLayout_TableCellKeepsAncestorPaintLayers(t *testing.T) {
+	html := `<table style="background:#fff2cc"><thead style="background:#163b64"><tr style="background:#008000"><th>HEAD</th></tr></thead><tbody style="background:#e6e6e6"><tr style="background:#0000ff"><td>BODY</td></tr></tbody></table>`
+	root, err := boxes.Build(html)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	pages := Flow(root, testOptions())
+	var head, body *PlacedBox
+	for pageIndex := range pages {
+		for blockIndex := range pages[pageIndex].Blocks {
+			block := &pages[pageIndex].Blocks[blockIndex]
+			if block.Text == "HEAD" {
+				head = block
+			}
+			if block.Text == "BODY" {
+				body = block
+			}
+		}
+	}
+	if head == nil || body == nil {
+		t.Fatalf("table cell blocks not found: head=%v body=%v", head, body)
+	}
+	assertLayers := func(name string, block *PlacedBox, want ...string) {
+		t.Helper()
+		if len(block.TablePaintUnderlays) != len(want) {
+			t.Fatalf("%s underlay count=%d, want %d", name, len(block.TablePaintUnderlays), len(want))
+		}
+		for i, tag := range want {
+			if block.TablePaintUnderlays[i].Source.Tag != tag {
+				t.Errorf("%s underlay %d source=%q, want %q", name, i, block.TablePaintUnderlays[i].Source.Tag, tag)
+			}
+		}
+	}
+	assertLayers("header", head, "table", "thead", "tr")
+	assertLayers("body", body, "table", "tbody", "tr")
+	if len(head.TablePaintOverlays) != 0 || len(body.TablePaintOverlays) != 0 {
+		t.Error("layers without borders must not create border paint operations")
+	}
+}
+
+func TestLayout_TableGroupOpacityWrapsItsCellContents(t *testing.T) {
+	root, err := boxes.Build(`<table><thead style="opacity:.5"><tr><th>HEAD</th><th>SECOND</th></tr></thead><tbody><tr><td>BODY</td><td>ROW</td></tr></tbody></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	pages := Flow(root, testOptions())
+	var header []PlacedBox
+	for _, block := range pages[0].Blocks {
+		if block.Text == "HEAD" || block.Text == "SECOND" {
+			header = append(header, block)
+		}
+	}
+	if len(header) != 2 {
+		t.Fatalf("header cells=%d, want 2", len(header))
+	}
+	if len(header[0].OpacityGroups) != 1 || header[0].OpacityGroups[0].Opacity != 0.5 || header[0].OpacityGroups[0].ID != header[1].OpacityGroups[0].ID {
+		t.Fatalf("header cells must share one row-group opacity: %+v", header)
+	}
+	for _, block := range pages[0].Blocks {
+		if block.Text == "BODY" && len(block.OpacityGroups) != 0 {
+			t.Errorf("body cell unexpectedly belongs to header opacity group: %+v", block.OpacityGroups)
+		}
+	}
+}
+
+func TestLayout_TablePaintLayersRetainStructuralBorders(t *testing.T) {
+	root, err := boxes.Build(`<table style="border-collapse:separate;border:2px solid red"><thead style="border:1px solid blue"><tr style="border-bottom:1px solid green"><th>HEAD</th></tr></thead><tbody><tr><td>BODY</td></tr></tbody></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var header *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		if block.Text == "HEAD" {
+			header = &block
+			break
+		}
+	}
+	if header == nil {
+		t.Fatal("header cell not found")
+	}
+	want := []string{"table", "thead", "tr"}
+	if len(header.TablePaintOverlays) != len(want) {
+		t.Fatalf("border layers=%d, want %d", len(header.TablePaintOverlays), len(want))
+	}
+	for i, tag := range want {
+		if header.TablePaintOverlays[i].Source.Tag != tag {
+			t.Errorf("border layer %d source=%q, want %q", i, header.TablePaintOverlays[i].Source.Tag, tag)
+		}
+	}
+}

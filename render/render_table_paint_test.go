@@ -1,0 +1,84 @@
+package render
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRender_TableBackgroundLayersPaintInCSSOrder(t *testing.T) {
+	html := `<table style="background:#fff2cc"><thead style="background:#163b64;color:white"><tr style="background:#008000"><th>Measure</th></tr></thead><tbody style="background:#e6e6e6"><tr style="background:#0000ff"><td>Reading</td></tr></tbody></table>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	colors := []string{
+		"1 0.9490196078431372 0.8 rg",                                    // table
+		"0.08627450980392157 0.23137254901960785 0.39215686274509803 rg", // thead
+		"0 0.5019607843137255 0 rg",                                      // header row
+		"0.9019607843137255 0.9019607843137255 0.9019607843137255 rg",    // tbody
+		"0 0 1 rg", // body row
+	}
+	previous := -1
+	for _, color := range colors {
+		index := strings.Index(content, color)
+		if index < 0 {
+			t.Fatalf("table paint color %q was not emitted", color)
+		}
+		if index <= previous {
+			t.Fatalf("table paint layers are out of order at %q", color)
+		}
+		previous = index
+	}
+	if !strings.Contains(content, "(Measure)") || !strings.Contains(content, "(Reading)") {
+		t.Fatal("table text is missing from the content stream")
+	}
+}
+
+func TestRender_TableGroupOpacityCompositesItsCellsAndBackground(t *testing.T) {
+	pdf, err := RenderHTMLToPDF(`<table><thead style="opacity:.5;background:#163b64;color:white"><tr><th>HEAD</th><th>SECOND</th></tr></thead><tbody><tr><td>BODY</td><td>ROW</td></tr></tbody></table>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	if !strings.Contains(string(pdf), "/Subtype /Form") || !strings.Contains(string(pdf), "/CA 0.5 /ca 0.5") {
+		t.Fatal("row-group opacity must composite the complete table group")
+	}
+	content := streamText(t, pdf)
+	if !strings.Contains(content, "0.08627450980392157 0.23137254901960785 0.39215686274509803 rg") || !strings.Contains(content, "(HEAD)") {
+		t.Fatal("the opacity form must retain both the group background and its cell text")
+	}
+}
+
+func TestRender_TableStructuralBordersPaintInSeparateMode(t *testing.T) {
+	pdf, err := RenderHTMLToPDF(`<table style="border-collapse:separate;border:2px solid red"><thead style="border:1px solid blue"><tr style="border-bottom:1px solid green"><th>HEAD</th></tr></thead><tbody><tr><td>BODY</td></tr></tbody></table>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	for _, color := range []string{"1 0 0 rg", "0 0 1 rg", "0 0.5 0 rg"} {
+		if !strings.Contains(content, color) {
+			t.Errorf("structural border color %q is missing", color)
+		}
+	}
+}
+
+func TestRender_RepeatedHeaderKeepsItsPaintLayers(t *testing.T) {
+	var body strings.Builder
+	body.WriteString(`<table style="margin:0"><thead style="background:#163b64;color:white"><tr><th>REPEATED HEADER</th></tr></thead><tbody>`)
+	for i := 0; i < 90; i++ {
+		body.WriteString(`<tr><td>row data that continues the table across physical pages</td></tr>`)
+	}
+	body.WriteString(`</tbody></table>`)
+	pdf, err := RenderHTMLToPDF(body.String())
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	blue := "0.08627450980392157 0.23137254901960785 0.39215686274509803 rg"
+	if count := strings.Count(content, blue); count < 2 {
+		t.Fatalf("painted header background count=%d, want one for each page fragment", count)
+	}
+	if count := strings.Count(content, "(REPEATED)"); count < 2 {
+		t.Fatalf("repeated header text count=%d, want at least 2", count)
+	}
+}

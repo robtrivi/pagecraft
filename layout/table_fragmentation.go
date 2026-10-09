@@ -218,6 +218,14 @@ func fullTableCellRanges(cells []tableDoneCell) []tableCellLineRange {
 
 func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowHeight, y float64, firstFragment, lastFragment bool, pages *[]Page, opts Options, colWidths []float64, collapsed, repeated, alignCompletedCellTop bool) float64 {
 	page := &(*pages)[len(*pages)-1]
+	if len(cells) == 0 {
+		return y + rowHeight
+	}
+	tableX := opts.left() + cells[0].table.Style.MarginLeft
+	tableWidth := 0.0
+	for _, width := range colWidths {
+		tableWidth += width
+	}
 	for index, cell := range cells {
 		lines := cell.lines[ranges[index].first:ranges[index].end]
 		style := fragmentBox(cell.b, firstFragment, lastFragment)
@@ -234,6 +242,7 @@ func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowH
 		contentWidth := max(0, width-horizontalInsets(style))
 		text := inlineFragmentText(tableCellWords(lines))
 		placedCell := placed(style, text, nil, x, y, width, rowHeight, cell.fs, font)
+		applyTablePaint(&placedCell, cell, tableX, tableWidth, y, rowHeight, firstFragment, lastFragment, repeated, index == 0, index == len(cells)-1, collapsed, opts)
 		placedCell.source = cell.b
 		placedCell = fragmentPlacedBox(placedCell, firstFragment, lastFragment)
 		offset := 0.0

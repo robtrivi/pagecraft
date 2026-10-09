@@ -27,6 +27,7 @@ type Options struct {
 	FontVariants          map[string]fonts.Variants
 	groupSequence         *int
 	groupStack            []OpacityGroup
+	tableOpacityCache     map[*boxes.Box]OpacityGroup
 }
 
 func (or Options) left() float64  { return or.Margin + or.space.marginLeft }
@@ -78,6 +79,8 @@ type PlacedBox struct {
 	Opacity                  float64
 	HasOpacity               bool
 	OpacityGroups            []OpacityGroup
+	TablePaintUnderlays      []TablePaintLayer
+	TablePaintOverlays       []TablePaintLayer
 	ClipRects                []ClipRect
 	LetterSpacing            float64
 	Runs                     [][]TextRun // Inline runs per line; nil outside normal flow.
@@ -85,6 +88,25 @@ type PlacedBox struct {
 	Width                    float64
 	Height                   float64
 }
+
+// TablePaintLayer retains the source box and fragment geometry for table,
+// row-group, and row paint layers that the cell grid does not place directly.
+type TablePaintLayer struct {
+	Source *boxes.Box
+	Bounds FragmentBounds
+	Edges  TablePaintEdges
+}
+
+// TablePaintEdges selects the border edges visible on a structural fragment.
+type TablePaintEdges uint8
+
+const (
+	TablePaintTop TablePaintEdges = 1 << iota
+	TablePaintRight
+	TablePaintBottom
+	TablePaintLeft
+	TablePaintAllEdges = TablePaintTop | TablePaintRight | TablePaintBottom | TablePaintLeft
+)
 
 // fragmentOccurrence is the identity shared by one container fragment and
 // direct child placements emitted inside that fragment.

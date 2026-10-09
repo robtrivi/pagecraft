@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/robtrivi/pagecraft-go/boxes"
 	"github.com/robtrivi/pagecraft-go/css"
 	"github.com/robtrivi/pagecraft-go/fonts"
 	"github.com/robtrivi/pagecraft-go/images"
@@ -34,7 +35,9 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 			continue
 		}
 		writeClipStart(&sb, b, opts.PageHeight)
+		drawTablePaintLayers(&sb, b.TablePaintUnderlays, opts.PageHeight, gs, true)
 		drawBackground(&sb, b, opts.PageHeight, gs)
+		drawTablePaintLayers(&sb, b.TablePaintOverlays, opts.PageHeight, gs, false)
 		if node := fragmentNodes[bi]; node != nil {
 			drawFragmentDecorations(&sb, node.Children, opts.PageHeight, gs)
 		}
@@ -163,7 +166,9 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 				}
 			}
 		}
+		drawTablePaintLayers(&content, inner.TablePaintUnderlays, opts.PageHeight, gs, true)
 		drawBackground(&content, inner, opts.PageHeight, gs)
+		drawTablePaintLayers(&content, inner.TablePaintOverlays, opts.PageHeight, gs, false)
 		if node := fragmentNodes[form.start+bi]; node != nil {
 			drawFragmentDecorations(&content, node.Children, opts.PageHeight, gs)
 		}
@@ -182,6 +187,44 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 	compressed := flateBytes([]byte(content.String()))
 	return fmt.Sprintf("<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 %g %g] /Group << /S /Transparency /CS /DeviceRGB /I true >> /Resources %s /Length %d /Filter /FlateDecode >>\nstream\n%s\nendstream",
 		opts.PageWidth, opts.PageHeight, resources, len(compressed), compressed)
+}
+
+func drawTablePaintLayers(sb *strings.Builder, layers []layout.TablePaintLayer, pageHeight float64, gs map[float64]int, underlay bool) {
+	for _, layer := range layers {
+		source := layer.Source
+		if source == nil {
+			continue
+		}
+		style := source.Style
+		paint := layout.PlacedBox{
+			HasBg: style.HasBg, Bg: style.Bg,
+			BorderWidth: style.BorderWidth, BorderCornerRadii: style.BorderCornerRadii, Border: style.Border,
+			BorderTop: style.BorderTop, BorderRight: style.BorderRight,
+			BorderBottom: style.BorderBottom, BorderLeft: style.BorderLeft,
+			HasOpacity: false,
+			X:          layer.Bounds.X, Y: layer.Bounds.Y, Width: layer.Bounds.Width, Height: layer.Bounds.Height,
+		}
+		if underlay {
+			paint.BorderWidth = 0
+			paint.BorderTop, paint.BorderRight, paint.BorderBottom, paint.BorderLeft = boxes.BorderSide{}, boxes.BorderSide{}, boxes.BorderSide{}, boxes.BorderSide{}
+		} else {
+			paint.HasBg = false
+			paint.BorderWidth = 0
+			if layer.Edges&layout.TablePaintTop == 0 {
+				paint.BorderTop = boxes.BorderSide{}
+			}
+			if layer.Edges&layout.TablePaintRight == 0 {
+				paint.BorderRight = boxes.BorderSide{}
+			}
+			if layer.Edges&layout.TablePaintBottom == 0 {
+				paint.BorderBottom = boxes.BorderSide{}
+			}
+			if layer.Edges&layout.TablePaintLeft == 0 {
+				paint.BorderLeft = boxes.BorderSide{}
+			}
+		}
+		drawBackground(sb, paint, pageHeight, gs)
+	}
 }
 
 // flateBytes compresses data for PDF streams.

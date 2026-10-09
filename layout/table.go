@@ -12,18 +12,24 @@ import (
 // tableCell represents a table cell and its spans.
 type tableCell struct {
 	b    *boxes.Box
+	row  *boxes.Box
 	span int
 }
 
 type tableDoneCell struct {
-	b       *boxes.Box
-	col     int
-	span    int
-	rowSpan int
-	lines   []tableCellLine
-	after   float64
-	fs      float64
-	font    *fonts.Face
+	b                     *boxes.Box
+	col                   int
+	span                  int
+	rowSpan               int
+	lines                 []tableCellLine
+	after                 float64
+	fs                    float64
+	font                  *fonts.Face
+	table                 *boxes.Box
+	row                   *boxes.Box
+	group                 *boxes.Box
+	tableFirst, tableLast bool
+	groupFirst, groupLast bool
 }
 
 type tableSpanningCell struct {
@@ -42,7 +48,7 @@ func tableGridFromRows(rows []*boxes.Box) ([][]tableCell, int) {
 		columnCount := 0
 		for _, cell := range cells {
 			span := max(1, cell.Style.ColSpan)
-			gridRow = append(gridRow, tableCell{b: cell, span: span})
+			gridRow = append(gridRow, tableCell{b: cell, row: row, span: span})
 			columnCount += span
 		}
 		cols = max(cols, columnCount)
@@ -93,12 +99,16 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 	currentRow := 0
 	var headDone [][]tableDoneCell
 	var headRh []float64
+	if opts.tableOpacityCache == nil {
+		opts.tableOpacityCache = make(map[*boxes.Box]OpacityGroup)
+	}
 	canRepeat := len(head) > 0
-	placeCells := func(done []tableDoneCell, rh, y float64) float64 {
+	placeCells := func(done []tableDoneCell, rh, y float64, repeated bool) float64 {
 		p := &(*pages)[len(*pages)-1]
-		for _, d := range done {
+		for cellIndex, d := range done {
 			pb := placed(d.b, d.b.Text,
 				nil, tableX+colX[d.col], y, cellW(d.col, d.span), rh, d.fs, d.font)
+			applyTablePaint(&pb, d, tableX, tableWidth, y, rh, true, true, repeated, cellIndex == 0, cellIndex == len(done)-1, t.Style.BorderCollapse, opts)
 			contentH := tableCellAllContentHeight(d, opts) + d.b.Style.PaddingTop + d.b.Style.PaddingBottom
 			borderTop, _, borderBottom, borderLeft := tableCellBorderInsets(d.b, t.Style.BorderCollapse)
 			contentBoxH := rh - borderTop - borderBottom
@@ -168,7 +178,14 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 				contentW = 0
 			}
 			lines, after := tableCellContent(rc.b, contentW, opts)
-			doneCell := tableDoneCell{b: rc.b, col: col, span: span, lines: lines, after: after, fs: fs, font: font}
+			group := tableRowGroup(rc.row)
+			doneCell := tableDoneCell{
+				b: rc.b, col: col, span: span, lines: lines, after: after, fs: fs, font: font,
+				table: t, row: rc.row, group: group,
+				tableFirst: ri == 0, tableLast: ri == len(grid)-1,
+				groupFirst: ri == 0 || tableRowGroup(rows[ri-1]) != group,
+				groupLast:  ri == len(grid)-1 || tableRowGroup(rows[ri+1]) != group,
+			}
 			if h := tableCellAllContentHeight(doneCell, opts) + rc.b.Style.PaddingTop + rc.b.Style.PaddingBottom + borderTop + borderBottom; h > rh {
 				rh = h
 			}
@@ -220,7 +237,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 					if y+headRh[hi] > bottom {
 						break
 					}
-					y = placeCells(headDone[hi], headRh[hi], y)
+					y = placeCells(headDone[hi], headRh[hi], y, true)
 				}
 			}
 		}
@@ -231,7 +248,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			}
 		}
 		rowY := y
-		y = placeCells(done, rh, y)
+		y = placeCells(done, rh, y, false)
 		if len(activeSpans) > 0 {
 			pageIndex := len(*pages) - 1
 			extendTableSpanFragments(activeSpans, pageIndex, ri, rowY, rh, true, pages)
@@ -321,4 +338,91 @@ func tableCells(r *boxes.Box) []*boxes.Box {
 		}
 	}
 	return cells
+}
+
+func tableRowGroup(row *boxes.Box) *boxes.Box {
+	if row == nil || row.Parent == nil {
+		return nil
+	}
+	switch row.Parent.Tag {
+	case "thead", "tbody", "tfoot":
+		return row.Parent
+	default:
+		return nil
+	}
+}
+
+func applyTablePaint(block *PlacedBox, cell tableDoneCell, x, width, y, height float64,
+	firstFragment, lastFragment, repeated, firstCell, lastCell, collapsed bool,
+	opts Options) {
+	groups := append([]OpacityGroup(nil), opts.groupStack...)
+	for _, source := range []*boxes.Box{cell.table, cell.group, cell.row} {
+		if source == nil || !source.Style.HasOpacity {
+			continue
+		}
+		group, ok := opts.tableOpacityCache[source]
+		if !ok {
+			if opts.groupSequence == nil {
+				continue
+			}
+			*opts.groupSequence++
+			group = OpacityGroup{ID: *opts.groupSequence, Opacity: source.Style.Opacity}
+			opts.tableOpacityCache[source] = group
+		}
+		groups = append(groups, group)
+	}
+	ensureOpacityGroups(block, groups, opts.groupSequence)
+
+	if firstCell {
+		for _, source := range []*boxes.Box{cell.table, cell.group, cell.row} {
+			if source == nil || !source.Style.HasBg {
+				continue
+			}
+			block.TablePaintUnderlays = append(block.TablePaintUnderlays, TablePaintLayer{
+				Source: source, Bounds: FragmentBounds{X: x, Y: y, Width: width, Height: height}, Edges: TablePaintAllEdges,
+			})
+		}
+	}
+	if !lastCell || collapsed {
+		return
+	}
+	addBorderLayer := func(source *boxes.Box, edges TablePaintEdges) {
+		if source == nil || !hasTableBorder(source.Style) || edges == 0 {
+			return
+		}
+		block.TablePaintOverlays = append(block.TablePaintOverlays, TablePaintLayer{
+			Source: source, Bounds: FragmentBounds{X: x, Y: y, Width: width, Height: height}, Edges: edges,
+		})
+	}
+	tableEdges := TablePaintLeft | TablePaintRight
+	if cell.tableFirst && firstFragment {
+		tableEdges |= TablePaintTop
+	}
+	if cell.tableLast && lastFragment {
+		tableEdges |= TablePaintBottom
+	}
+	addBorderLayer(cell.table, tableEdges)
+	if cell.group != nil {
+		groupEdges := TablePaintLeft | TablePaintRight
+		if (cell.groupFirst && firstFragment) || repeated && firstFragment {
+			groupEdges |= TablePaintTop
+		}
+		if (cell.groupLast && lastFragment) || repeated && lastFragment {
+			groupEdges |= TablePaintBottom
+		}
+		addBorderLayer(cell.group, groupEdges)
+	}
+	rowEdges := TablePaintLeft | TablePaintRight
+	if firstFragment {
+		rowEdges |= TablePaintTop
+	}
+	if lastFragment {
+		rowEdges |= TablePaintBottom
+	}
+	addBorderLayer(cell.row, rowEdges)
+}
+
+func hasTableBorder(style boxes.ComputedStyle) bool {
+	return style.BorderWidth > 0 || style.BorderTop.Width > 0 || style.BorderRight.Width > 0 ||
+		style.BorderBottom.Width > 0 || style.BorderLeft.Width > 0
 }

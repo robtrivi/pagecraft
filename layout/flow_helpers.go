@@ -9,6 +9,8 @@ import (
 func shiftPlacedBox(block *PlacedBox, dx, dy float64) {
 	block.X += dx
 	block.Y += dy
+	shiftTablePaintLayers(block.TablePaintUnderlays, dx, dy)
+	shiftTablePaintLayers(block.TablePaintOverlays, dx, dy)
 	for line := range block.Runs {
 		for run := range block.Runs[line] {
 			block.Runs[line][run].X += dx
@@ -16,6 +18,13 @@ func shiftPlacedBox(block *PlacedBox, dx, dy float64) {
 		}
 	}
 	shiftChildDecorations(block.fragmentNode, dx, dy)
+}
+
+func shiftTablePaintLayers(layers []TablePaintLayer, dx, dy float64) {
+	for index := range layers {
+		layers[index].Bounds.X += dx
+		layers[index].Bounds.Y += dy
+	}
 }
 
 func shiftChildDecorations(node *FragmentNode, dx, dy float64) {
@@ -28,6 +37,8 @@ func shiftChildDecorations(node *FragmentNode, dx, dy float64) {
 		}
 		child.Placed.X += dx
 		child.Placed.Y += dy
+		shiftTablePaintLayers(child.Placed.TablePaintUnderlays, dx, dy)
+		shiftTablePaintLayers(child.Placed.TablePaintOverlays, dx, dy)
 		for line := range child.Placed.Runs {
 			for run := range child.Placed.Runs[line] {
 				child.Placed.Runs[line][run].X += dx

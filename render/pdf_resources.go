@@ -52,6 +52,24 @@ func collectAlphas(pages []layout.Page) ([]float64, map[float64]int) {
 					add(s.Color[3] * op)
 				}
 			}
+			addLayerAlphas := func(layers []layout.TablePaintLayer) {
+				for _, layer := range layers {
+					if layer.Source == nil {
+						continue
+					}
+					style := layer.Source.Style
+					if style.HasBg {
+						add(style.Bg[3])
+					}
+					for _, side := range []boxes.BorderSide{style.BorderTop, style.BorderRight, style.BorderBottom, style.BorderLeft} {
+						if side.Width > 0 {
+							add(side.Color[3])
+						}
+					}
+				}
+			}
+			addLayerAlphas(b.TablePaintUnderlays)
+			addLayerAlphas(b.TablePaintOverlays)
 			for _, ln := range b.Runs {
 				for _, r := range ln {
 					add(r.Alpha)
