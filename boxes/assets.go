@@ -22,6 +22,10 @@ func resolveImage(the *html.Node, b *Box, ld *loader) error {
 		b.Text = getAttr(the, "alt")
 		return nil
 	}
+	if image, ok := ld.images[src]; ok {
+		b.Image, b.SVG = image.raster, image.vector
+		return nil
+	}
 	alt := func(err error) error {
 		if isRemote(src) {
 			ld.warn("img %s: %v (using alt text)", src, err)
@@ -36,6 +40,7 @@ func resolveImage(the *html.Node, b *Box, ld *loader) error {
 	}
 	if doc, svgErr := svg.Parse(data); svgErr == nil {
 		b.SVG = doc
+		ld.images[src] = loadedImage{vector: doc}
 		return nil
 	}
 	r, err := images.Decode(data)
@@ -43,6 +48,7 @@ func resolveImage(the *html.Node, b *Box, ld *loader) error {
 		return alt(fmt.Errorf("boxes: <img>: %w", err))
 	}
 	b.Image = r
+	ld.images[src] = loadedImage{raster: r}
 	return nil
 }
 

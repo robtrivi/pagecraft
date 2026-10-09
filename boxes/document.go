@@ -13,6 +13,8 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft-go/images"
+	"github.com/robtrivi/pagecraft-go/svg"
 	"golang.org/x/net/html"
 )
 
@@ -72,6 +74,12 @@ type loader struct {
 	fetch    func(url string) ([]byte, error)
 	maxBytes int64
 	warnings []string
+	images   map[string]loadedImage
+}
+
+type loadedImage struct {
+	raster *images.Raster
+	vector *svg.Document
 }
 
 func (ld *loader) warn(format string, args ...any) {

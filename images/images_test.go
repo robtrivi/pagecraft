@@ -70,6 +70,33 @@ func TestImages_DecodeJPEG_ReturnsDims(t *testing.T) {
 	if got.Space != "DeviceRGB" {
 		t.Errorf("color space: got %q, want DeviceRGB", got.Space)
 	}
+	if len(got.Pixels) != 0 {
+		t.Errorf("JPEG pixels: got %d bytes, want no decoded RGB buffer", len(got.Pixels))
+	}
+	if !bytes.Equal(got.Raw, buf.Bytes()) {
+		t.Error("JPEG source bytes were not preserved for PDF passthrough")
+	}
+}
+
+func TestImages_DecodeGrayscaleJPEG_PreservesDeviceGray(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 3, 2))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("encode jpeg: %v", err)
+	}
+	got, err := Decode(buf.Bytes())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Format != "jpeg" || got.Space != "DeviceGray" {
+		t.Errorf("got format=%q space=%q, want jpeg DeviceGray", got.Format, got.Space)
+	}
+	if len(got.Pixels) != 0 {
+		t.Errorf("JPEG pixels: got %d bytes, want no decoded RGB buffer", len(got.Pixels))
+	}
+	if !bytes.Equal(got.Raw, buf.Bytes()) {
+		t.Error("JPEG source bytes were not preserved for PDF passthrough")
+	}
 }
 
 func TestImages_DecodeInvalid_ReturnsError(t *testing.T) {

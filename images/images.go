@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"errors"
 	"image"
-	_ "image/jpeg"
+	"image/color"
+	"image/jpeg"
 	_ "image/png"
 )
 
-// Raster contains a decoded RGB image.
+// Raster contains either RGB pixels or original JPEG bytes for PDF passthrough.
 type Raster struct {
 	Format string // "png" | "jpeg"
 	Space  string // "DeviceRGB" | "DeviceGray" | "" (pass-through JPEG only)
@@ -19,8 +20,18 @@ type Raster struct {
 	Raw    []byte // bytes originales (passthrough JPEG)
 }
 
-// Decode converts PNG or JPEG bytes into an RGB image.
+// Decode converts PNG bytes to RGB and preserves supported JPEG data for passthrough.
 func Decode(data []byte) (*Raster, error) {
+	if config, err := jpeg.DecodeConfig(bytes.NewReader(data)); err == nil {
+		if config.Width > 0 && config.Height > 0 {
+			switch config.ColorModel.Convert(color.Black).(type) {
+			case color.Gray:
+				return &Raster{Format: "jpeg", Space: "DeviceGray", Width: config.Width, Height: config.Height, Raw: data}, nil
+			case color.YCbCr:
+				return &Raster{Format: "jpeg", Space: "DeviceRGB", Width: config.Width, Height: config.Height, Raw: data}, nil
+			}
+		}
+	}
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

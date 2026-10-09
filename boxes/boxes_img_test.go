@@ -46,6 +46,23 @@ func TestBoxes_ImgDataURI_ResolvesRaster(t *testing.T) {
 	}
 }
 
+func TestBoxes_ImgRepeatedSource_ReusesRaster(t *testing.T) {
+	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(makePNGBytes(t, 4, 2))
+	root, err := Build(`<img src="` + uri + `"><img src="` + uri + `">`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(root.Children) != 2 {
+		t.Fatalf("children: got %d, want 2", len(root.Children))
+	}
+	if root.Children[0].Image == nil || root.Children[1].Image == nil {
+		t.Fatal("expected both images to resolve")
+	}
+	if root.Children[0].Image != root.Children[1].Image {
+		t.Error("identical image sources were decoded into separate rasters")
+	}
+}
+
 func TestBoxes_ImgLocalFile_ResolvesRaster(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a.png")
 	if err := os.WriteFile(path, makePNGBytes(t, 3, 3), 0644); err != nil {

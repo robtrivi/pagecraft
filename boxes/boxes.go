@@ -83,6 +83,7 @@ func BuildWithOptions(htmlStr string, opts Options) (*Box, []string, error) {
 		fetch:    opts.Fetch,
 		maxBytes: maxBytes,
 		warnings: []string{},
+		images:   map[string]loadedImage{},
 	}
 	if ld.fetch == nil {
 		ld.fetch = defaultFetch(maxBytes)
