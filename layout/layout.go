@@ -142,6 +142,49 @@ func (or Options) pageLeftMargin() float64 {
 	}
 	return or.Margin
 }
+
+// pageAreaLeftMargin returns the @page margin without the body's margin.
+// Fixed boxes are positioned in the page area, independently of body flow.
+func (or Options) pageAreaLeftMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginLeft
+	}
+	if or.PageMargins.HasLeft {
+		return or.PageMargins.Left
+	}
+	return or.Margin
+}
+
+func (or Options) pageAreaRightMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginRight
+	}
+	if or.PageMargins.HasRight {
+		return or.PageMargins.Right
+	}
+	return or.Margin
+}
+
+func (or Options) pageAreaTopMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginTop
+	}
+	if or.PageMargins.HasTop {
+		return or.PageMargins.Top
+	}
+	return or.Margin
+}
+
+func (or Options) pageAreaBottomMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginBottom
+	}
+	if or.PageMargins.HasBottom {
+		return or.PageMargins.Bottom
+	}
+	return or.Margin
+}
+
 func (or Options) pageRightMargin() float64 {
 	if or.space.pageMarginSet {
 		return or.space.pageMarginRight + or.space.bodyMargin

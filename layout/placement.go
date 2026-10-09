@@ -26,15 +26,15 @@ func definiteSize(value float64) sizeBasis { return sizeBasis{Value: value, Defi
 func placeFixed(fb *boxes.Box, opts Options, usable float64) PlacedBox {
 	fs := resolveSize(fb, opts)
 	_, font := measureFor(opts, fb)
-	x := opts.left() + fb.Style.Left
-	yy := opts.top() + fb.Style.Top
+	x := opts.pageAreaLeftMargin() + fb.Style.Left
+	yy := opts.pageAreaTopMargin() + fb.Style.Top
 	if fb.Image != nil {
 		w, h := rasterDimensions(fb, usable, 0)
 		if fb.Style.HasRight {
-			x = opts.PageWidth - opts.space.pageMarginRight - opts.space.marginRight - fb.Style.Right - w
+			x = opts.PageWidth - opts.pageAreaRightMargin() - fb.Style.Right - w
 		}
 		if fb.Style.HasBottom {
-			yy = opts.PageHeight - opts.space.pageMarginBottom - opts.space.marginBottom - fb.Style.Bottom - h
+			yy = opts.PageHeight - opts.pageAreaBottomMargin() - fb.Style.Bottom - h
 		}
 		pb := placed(fb, fb.Text, fb.Image, x, yy, w, h, fs, font)
 		return pb
@@ -48,10 +48,10 @@ func placeFixed(fb *boxes.Box, opts Options, usable float64) PlacedBox {
 	linesW := breakInlineStream(words, contentW, wraps(fb))
 	h := usedHeight(fb, inlineHeight(linesW, fb, opts), opts)
 	if fb.Style.HasRight {
-		x = opts.PageWidth - opts.space.pageMarginRight - opts.space.marginRight - fb.Style.Right - width
+		x = opts.PageWidth - opts.pageAreaRightMargin() - fb.Style.Right - width
 	}
 	if fb.Style.HasBottom {
-		yy = opts.PageHeight - opts.space.pageMarginBottom - opts.space.marginBottom - fb.Style.Bottom - h
+		yy = opts.PageHeight - opts.pageAreaBottomMargin() - fb.Style.Bottom - h
 	}
 	runs := assignRuns(fb, linesW, x+fb.Style.BorderLeft.Width+fb.Style.PaddingLeft, contentW, yy+fb.Style.BorderTop.Width+fb.Style.PaddingTop, opts)
 	pb := placed(fb, fb.Text, nil, x, yy, width, h, fs, font)

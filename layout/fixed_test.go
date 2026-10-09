@@ -72,3 +72,30 @@ func TestLayout_Fixed_BottomRightUsesPageEdgesAndRepeats(t *testing.T) {
 		}
 	}
 }
+
+func TestLayout_Fixed_TopLeftUsesPageEdges(t *testing.T) {
+	html := `<!doctype html><html><head><style>@page{margin:30pt 20pt 10pt 40pt}body{margin:8px}.badge{position:fixed;left:12pt;top:8pt;width:100pt;height:20pt}</style></head><body><div class="badge">Marca</div></body></html>`
+	root, err := boxes.Build(html)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageMargins, opts.PageRules = root.Page.Margins, root.PageRules
+	pages := Flow(root, opts)
+	if len(pages) != 1 {
+		t.Fatalf("pages: got %d, want 1", len(pages))
+	}
+	var badge *PlacedBox
+	for i := range pages[0].Blocks {
+		if pages[0].Blocks[i].Text == "Marca" {
+			badge = &pages[0].Blocks[i]
+			break
+		}
+	}
+	if badge == nil {
+		t.Fatal("fixed marker was not placed")
+	}
+	if !approx(badge.X, 52) || !approx(badge.Y, 38) {
+		t.Errorf("marca: x=%v y=%v, want 52/38 at the page area's top-left", badge.X, badge.Y)
+	}
+}
