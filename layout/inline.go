@@ -148,7 +148,7 @@ func collectInlineDraftsWithScope(b *boxes.Box, opts Options, scope *inlineScope
 			continue
 		} else if inlinePartChild(p.Child) {
 			childScope := &inlineScope{box: p.Child, parent: scope, depth: scope.depth + 1}
-			out = append(out, collectFlattenInlineDrafts(p.Child, opts, childScope)...)
+			out = appendFlattenInlineDraftsInPlace(out, p.Child, 0, opts, childScope)
 		} else {
 			if len(out) > 0 {
 				out[len(out)-1].hardBreak = true
@@ -407,14 +407,16 @@ func collectFlattenInlineDrafts(b *boxes.Box, opts Options, scope *inlineScope) 
 }
 
 func collectFlattenInlineDraftsWithWidth(b *boxes.Box, maxWidth float64, opts Options, scope *inlineScope) []inlineDraft {
+	return appendFlattenInlineDraftsInPlace(nil, b, maxWidth, opts, scope)
+}
+
+func appendFlattenInlineDraftsInPlace(out []inlineDraft, b *boxes.Box, maxWidth float64, opts Options, scope *inlineScope) []inlineDraft {
+	start := len(out)
 	if b.Image != nil {
 		word := inlineImageDraft(b, maxWidth, opts)
 		word.scope = scope
-		return []inlineDraft{word}
-	}
-	var out []inlineDraft
-	if len(b.Parts) == 0 {
-		start := len(out)
+		out = append(out, word)
+	} else if len(b.Parts) == 0 {
 		out = appendTextDrafts(out, b, b.Text, opts)
 		setInlineScope(out[start:], scope)
 	} else {
@@ -427,7 +429,7 @@ func collectFlattenInlineDraftsWithWidth(b *boxes.Box, maxWidth float64, opts Op
 				out = appendHardBreakDraft(out, b, opts)
 			} else if inlinePartChild(p.Child) {
 				childScope := &inlineScope{box: p.Child, parent: scope, depth: scope.depth + 1}
-				out = append(out, collectFlattenInlineDraftsWithWidth(p.Child, maxWidth, opts, childScope)...)
+				out = appendFlattenInlineDraftsInPlace(out, p.Child, maxWidth, opts, childScope)
 			} else {
 				start := len(out)
 				out = appendTextDrafts(out, p.Child, p.Child.Text, opts)
@@ -435,15 +437,15 @@ func collectFlattenInlineDraftsWithWidth(b *boxes.Box, maxWidth float64, opts Op
 			}
 		}
 	}
-	if b.Style.Display == boxes.DisplayInline && len(out) > 0 {
+	if b.Style.Display == boxes.DisplayInline && len(out) > start {
 		startInset := b.Style.BorderLeft.Width + b.Style.PaddingLeft
 		endInset := b.Style.BorderRight.Width + b.Style.PaddingRight
-		out[0].inlineStartInset += startInset
-		out[0].w += startInset
+		out[start].inlineStartInset += startInset
+		out[start].w += startInset
 		out[len(out)-1].inlineEndInset += endInset
 		out[len(out)-1].w += endInset
 	}
-	normalizeCJKAdjacentSpacing(out)
+	normalizeCJKAdjacentSpacing(out[start:])
 	return out
 }
 

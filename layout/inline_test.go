@@ -57,6 +57,32 @@ func TestLayout_InlineBoxDecorationFollowsTextRunGeometry(t *testing.T) {
 	}
 }
 
+func TestLayout_CollectInlineDraftsAppendsNestedRunsInPlace(t *testing.T) {
+	root, err := boxes.Build(`<p>prefix <span>nested <b>deep</b></span> tail</p>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	paragraph := root
+	for paragraph.Tag != "p" {
+		if len(paragraph.Children) == 0 {
+			t.Fatalf("paragraph not found in box tree")
+		}
+		paragraph = paragraph.Children[0]
+	}
+	prefix := inlineDraft{inlineItem: inlineItem{text: "existing"}}
+	got := appendFlattenInlineDraftsInPlace([]inlineDraft{prefix}, paragraph, 0, testOptions(), &inlineScope{box: paragraph})
+	if len(got) < 2 || got[0].text != "existing" {
+		t.Fatalf("existing draft was not preserved: %#v", got)
+	}
+	var words []string
+	for _, draft := range got[1:] {
+		words = append(words, draft.text)
+	}
+	if want := []string{"prefix", "nested", "deep", "tail"}; !reflect.DeepEqual(words, want) {
+		t.Fatalf("nested inline text=%v, want %v", words, want)
+	}
+}
+
 func TestLayout_InlineBoxDecorationSlicesBordersAcrossWrappedLines(t *testing.T) {
 	root, err := boxes.Build(`<p style="width:82pt;margin:0;font:10pt/14pt Helvetica"><span style="background:#ffee99;border:1pt solid #123456;padding:2pt 3pt">ALPHA BRAVO CHARLIE DELTA ECHO FOXTROT</span></p>`)
 	if err != nil {

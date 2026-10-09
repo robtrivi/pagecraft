@@ -33,3 +33,14 @@ func BenchmarkRender_LargeDoc(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkRender_NestedInlineDoc(b *testing.B) {
+	paragraph := `<p>prefix <span>nested <b>bold <i>italic words</i></b> tail</span> end</p>`
+	html := strings.Repeat(paragraph, 500)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := RenderHTMLToPDF(html); err != nil {
+			b.Fatalf("error: %v", err)
+		}
+	}
+}
