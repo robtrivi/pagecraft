@@ -52,6 +52,15 @@ type pageGeometryDefaults struct {
 func (or Options) left() float64  { return or.pageLeftMargin() + or.space.marginLeft }
 func (or Options) right() float64 { return or.pageRightMargin() + or.space.marginRight }
 func (or Options) top() float64   { return or.pageTopMargin() + or.space.marginTop }
+
+// withinPageHorizontalRange sets a child coordinate range relative to the
+// resolved page margins while retaining the page-box coordinate system.
+func (or Options) withinPageHorizontalRange(x, width float64) Options {
+	or.space.marginLeft = x - or.pageLeftMargin()
+	or.space.marginRight = or.PageWidth - or.pageRightMargin() - x - width
+	return or
+}
+
 func (or Options) pageBottom() float64 {
 	return or.PageHeight - or.pageBottomMargin() - or.space.marginBottom
 }

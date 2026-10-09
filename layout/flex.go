@@ -311,9 +311,7 @@ func flowFlexColumn(f *boxes.Box, y float64, pages *[]Page, opts Options, usable
 			}
 		}
 		if flexColumnItemCanFlow(f, item, itemHeight, bottom, opts) {
-			itemOpts := opts
-			itemOpts.space.marginLeft = x - itemOpts.Margin
-			itemOpts.space.marginRight = itemOpts.PageWidth - x - width - itemOpts.Margin
+			itemOpts := opts.withinPageHorizontalRange(x, width)
 			if flexItemHasBlockFlow(item) {
 				itemBox := withUsedBorderBoxWidth(item, width)
 				y = flowNestedContainer(itemBox, y, boxInsets(itemBox), nestedContainerItems(itemBox), false, pages, itemOpts, width)
@@ -418,9 +416,7 @@ func flowFlexRow(f *boxes.Box, row flexRow, y, rowHeight float64, widths []float
 		itemOverflowClip := overflowClipForBox(item, x, itemY, widths[index], itemHeight, opts, hasDeclaredHeight(item, opts))
 		if flexItemHasBlockFlow(item) {
 			itemBox := withUsedBorderBoxWidth(item, widths[index])
-			itemOpts := opts
-			itemOpts.space.marginLeft = x - itemOpts.Margin
-			itemOpts.space.marginRight = itemOpts.PageWidth - x - widths[index] - itemOpts.Margin
+			itemOpts := opts.withinPageHorizontalRange(x, widths[index])
 			if isolateNestedFlow {
 				itemOpts.PageHeight = unboundedFragmentainerPageHeight(opts.PageHeight)
 			}

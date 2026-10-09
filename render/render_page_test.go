@@ -41,6 +41,21 @@ func TestRender_PageRuleComposesPhysicalSizeAndMargins(t *testing.T) {
 	}
 }
 
+func TestRender_FlexItemsStayInsideResolvedPageMargins(t *testing.T) {
+	html := `<style>@page { size: Letter; margin: 42pt 30pt 42pt 36pt } body { font: 9pt Arial } .metrics { display: flex } .metric { flex: 1; padding: 7pt 8pt } .metric b { display: block; font-size: 19pt } .metric span { font-size: 7pt }</style><div class="metrics"><div class="metric"><b>98.7</b><span>SERVICE LEVEL</span></div><div class="metric"><b>1,248</b><span>REQUESTS CLOSED</span></div><div class="metric"><b>3.4 h</b><span>FIRST RESPONSE</span></div></div>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	positions := tdAll([]byte(streamText(t, pdf)), "98.7")
+	if len(positions) != 1 {
+		t.Fatalf("98.7 positions: %v; content stream:\n%s", positions, streamText(t, pdf))
+	}
+	if positions[0][0] < 44 {
+		t.Errorf("flex item starts at x=%g, outside the resolved left page and body margins", positions[0][0])
+	}
+}
+
 func TestRender_PageRuleAppliesIndependentMargins(t *testing.T) {
 	pdf, err := RenderHTMLToPDF(`<style>@page { size: 400pt 500pt; margin: 10pt 20pt 30pt 40pt } body { margin: 0 }</style><p style="margin:0">Hello</p>`)
 	if err != nil {

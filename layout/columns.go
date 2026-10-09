@@ -343,9 +343,7 @@ func columnCollapsedMarginGap(previous float64, hasPrevious bool, current float6
 
 func placeColumnFloat(item *boxes.Box, y, columnX, columnWidth float64, fragmentainer int, pages *[]Page, opts Options) activeFloat {
 	if len(item.Children) > 0 {
-		columnOpts := opts
-		columnOpts.space.marginLeft = columnX - opts.pageLeftMargin()
-		columnOpts.space.marginRight = opts.PageWidth - opts.pageRightMargin() - columnX - columnWidth
+		columnOpts := opts.withinPageHorizontalRange(columnX, columnWidth)
 		firstBlock := (*pages)[len(*pages)-1].blockCount()
 		placedFloat := flowFloat(item, y, pages, columnOpts, columnWidth, opts.PageHeight-opts.pageBottomMargin()-opts.space.marginBottom)
 		placedFloat.x -= item.Style.MarginLeft

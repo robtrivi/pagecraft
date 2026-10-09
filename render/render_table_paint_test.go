@@ -1,9 +1,27 @@
 package render
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestRender_TableFrameStaysInsideAsymmetricPageMargins(t *testing.T) {
+	html := `<style>@page { size: 200pt 200pt; margin: 20pt 20pt 20pt 36pt } body { margin: 0 } table { border-collapse: separate; border: 2pt solid red; margin: 0; width: 100% } td { padding: 2pt }</style><table><tr><td>LEFT</td><td>RIGHT</td></tr></table>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	for name, pattern := range map[string]string{
+		"left border":  `1 0 0 rg 36 [0-9.]+ 2 [0-9.]+ re f`,
+		"right border": `1 0 0 rg 178 [0-9.]+ 2 [0-9.]+ re f`,
+	} {
+		if !regexp.MustCompile(pattern).MatchString(content) {
+			t.Errorf("table %s is missing at the resolved page edge; content stream:\n%s", name, content)
+		}
+	}
+}
 
 func TestRender_TableBackgroundLayersPaintInCSSOrder(t *testing.T) {
 	html := `<table style="background:#fff2cc"><thead style="background:#163b64;color:white"><tr style="background:#008000"><th>Measure</th></tr></thead><tbody style="background:#e6e6e6"><tr style="background:#0000ff"><td>Reading</td></tr></tbody></table>`
