@@ -17,7 +17,9 @@ type Options struct {
 	PageWidth, PageHeight float64
 	PageBackground        [4]float64
 	HasPageBackground     bool
+	PageRotation          int
 	Margin                float64 // equal on all four sides (v0.3)
+	PageMargins           css.PageMargins
 	space                 layoutSpace
 	FontSize              float64 // pt
 	LineHeight            float64 // Global override; 0 uses the font's normal value.
@@ -30,11 +32,48 @@ type Options struct {
 	tableOpacityCache     map[*boxes.Box]OpacityGroup
 }
 
-func (or Options) left() float64  { return or.Margin + or.space.marginLeft }
-func (or Options) right() float64 { return or.Margin + or.space.marginRight }
-func (or Options) top() float64   { return or.Margin + or.space.marginTop }
+func (or Options) left() float64  { return or.pageLeftMargin() + or.space.marginLeft }
+func (or Options) right() float64 { return or.pageRightMargin() + or.space.marginRight }
+func (or Options) top() float64   { return or.pageTopMargin() + or.space.marginTop }
 func (or Options) pageBottom() float64 {
-	return or.PageHeight - or.space.pageMargin - or.space.marginBottom
+	return or.PageHeight - or.pageBottomMargin() - or.space.marginBottom
+}
+
+func (or Options) pageLeftMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginLeft + or.space.bodyMargin
+	}
+	if or.PageMargins.HasLeft {
+		return or.PageMargins.Left
+	}
+	return or.Margin
+}
+func (or Options) pageRightMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginRight + or.space.bodyMargin
+	}
+	if or.PageMargins.HasRight {
+		return or.PageMargins.Right
+	}
+	return or.Margin
+}
+func (or Options) pageTopMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginTop + or.space.bodyMargin
+	}
+	if or.PageMargins.HasTop {
+		return or.PageMargins.Top
+	}
+	return or.Margin
+}
+func (or Options) pageBottomMargin() float64 {
+	if or.space.pageMarginSet {
+		return or.space.pageMarginBottom
+	}
+	if or.PageMargins.HasBottom {
+		return or.PageMargins.Bottom
+	}
+	return or.Margin
 }
 
 // DefaultOptions uses A4, a 1-inch margin, and a 12 pt base font size.
@@ -329,7 +368,22 @@ func Flow(root *boxes.Box, opts Options) []Page {
 
 func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 	if !opts.space.pageMarginSet {
-		opts.space = opts.space.withPageMargin(opts.Margin, true)
+		bodyMargin := root.Style.BodyMargin
+		left, right := opts.Margin, opts.Margin
+		top, bottom := opts.Margin, opts.Margin
+		if opts.PageMargins.HasLeft {
+			left = opts.PageMargins.Left
+		}
+		if opts.PageMargins.HasRight {
+			right = opts.PageMargins.Right
+		}
+		if opts.PageMargins.HasTop {
+			top = opts.PageMargins.Top
+		}
+		if opts.PageMargins.HasBottom {
+			bottom = opts.PageMargins.Bottom
+		}
+		opts.space = opts.space.withPageMargins(left, right, top, bottom).withBodyMargin(bodyMargin)
 	}
 	opts.Margin += root.Style.BodyMargin
 	usable := opts.PageWidth - opts.left() - opts.right()

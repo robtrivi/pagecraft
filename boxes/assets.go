@@ -94,13 +94,17 @@ func readMetadata(doc *html.Node) Metadata {
 // loadPage reads the first valid @page rule and its footer from style elements.
 func (b *Box) loadPage(texts []string) {
 	for _, t := range texts {
-		if w, h, m, ok := css.ParsePageRule(t); ok {
-			if w > 0 && h > 0 {
-				b.Page.Width, b.Page.Height = w, h
+		if page, ok := css.ParsePageStyle(t); ok {
+			if page.HasSize {
+				b.Page.Width, b.Page.Height = page.Width, page.Height
 			}
-			if m >= 0 {
-				b.Page.Margin = m
-				b.Page.HasMargin = true
+			b.Page.Margins = page.Margins
+			b.Page.Background, b.Page.HasBackground = page.Background, page.HasBackground
+			b.Page.Rotation = page.Rotation
+			if page.Margins.HasTop && page.Margins.HasRight && page.Margins.HasBottom && page.Margins.HasLeft &&
+				!page.Margins.TopPercent && !page.Margins.RightPercent && !page.Margins.BottomPercent && !page.Margins.LeftPercent &&
+				page.Margins.Top == page.Margins.Right && page.Margins.Top == page.Margins.Bottom && page.Margins.Top == page.Margins.Left {
+				b.Page.Margin, b.Page.HasMargin = page.Margins.Top, true
 			}
 			break
 		}
@@ -128,11 +132,15 @@ type Metadata struct {
 	Description string
 }
 
-// PageConfig stores the @page size and margin in points. Zero values mean no rule was set.
+// PageConfig stores the @page size and margins in points. Zero values mean no rule was set.
 type PageConfig struct {
 	Width, Height float64
 	Margin        float64
 	HasMargin     bool
+	Margins       css.PageMargins
+	Background    [4]float64
+	HasBackground bool
+	Rotation      int
 }
 
 func (b *Box) loadFonts(texts []string, ld *loader) error {

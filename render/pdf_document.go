@@ -23,7 +23,7 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 		}
 	}
 	footers := expandFooters(footer, len(pages))
-	alphas, gsIndex := collectAlphas(pages)
+	alphas, gsIndex := collectAlphas(pages, opts)
 	forms, formIndex := collectOpacityForms(pages)
 	fontID := 3 + 2*len(pages)
 	base14 := []string{"Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique"}
@@ -44,9 +44,13 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 	}
 	for i, pg := range pages {
 		pageObj := 3 + 2*i
+		rotation := ""
+		if opts.PageRotation != 0 {
+			rotation = fmt.Sprintf(" /Rotate %d", opts.PageRotation)
+		}
 		bodies = append(bodies, fmt.Sprintf(
-			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %g %g] /Resources << /Font <<%s%s >>%s%s >>%s /Contents %d 0 R >>",
-			opts.PageWidth, opts.PageHeight, base14Refs(fontID), fontRefs(faces, fontObjBase),
+			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %g %g]%s /Resources << /Font <<%s%s >>%s%s >>%s /Contents %d 0 R >>",
+			opts.PageWidth, opts.PageHeight, rotation, base14Refs(fontID), fontRefs(faces, fontObjBase),
 			xobjectRefs(imgs, svgs, imgBase, forms, formBase, i), extRefs(alphas, gsBase),
 			annotsRefs(annotPages[i], annotBase), pageObj+1))
 		bodies = append(bodies, contentStream(pg, opts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], gsIndex, formIndex[i][0]))

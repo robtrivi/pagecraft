@@ -11,7 +11,7 @@ import (
 	"github.com/robtrivi/pagecraft-go/svg"
 )
 
-func collectAlphas(pages []layout.Page) ([]float64, map[float64]int) {
+func collectAlphas(pages []layout.Page, opts layout.Options) ([]float64, map[float64]int) {
 	seen := map[float64]bool{}
 	var alphas []float64
 	add := func(a float64) {
@@ -20,6 +20,9 @@ func collectAlphas(pages []layout.Page) ([]float64, map[float64]int) {
 		}
 		seen[a] = true
 		alphas = append(alphas, a)
+	}
+	if opts.HasPageBackground {
+		add(opts.PageBackground[3])
 	}
 	for _, pg := range pages {
 		for _, b := range pg.Blocks {

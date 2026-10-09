@@ -23,7 +23,13 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 	var sb strings.Builder
 	fragmentNodes := fragmentNodesByPaintIndex(pg.FragmentTree)
 	if opts.HasPageBackground {
+		if opts.PageBackground[3] < 1 {
+			fmt.Fprintf(&sb, "q\n/GS%d gs\n", gs[opts.PageBackground[3]])
+		}
 		fmt.Fprintf(&sb, "%g %g %g rg\n0 0 %g %g re f\n", opts.PageBackground[0], opts.PageBackground[1], opts.PageBackground[2], opts.PageWidth, opts.PageHeight)
+		if opts.PageBackground[3] < 1 {
+			sb.WriteString("Q\n")
+		}
 	}
 	for bi := 0; bi < len(pg.Blocks); bi++ {
 		b := pg.Blocks[bi]

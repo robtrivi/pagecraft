@@ -96,8 +96,8 @@ func layoutParallelFlows(pages *[]Page, firstPageY, pageTop float64, opts Option
 	streams := make([]fragmentStream, 0, len(items))
 	for _, item := range items {
 		itemOpts := opts
-		itemOpts.space.marginLeft = item.x - itemOpts.Margin
-		itemOpts.space.marginRight = itemOpts.PageWidth - item.x - item.width - itemOpts.Margin
+		itemOpts.space.marginLeft = item.x - itemOpts.pageLeftMargin()
+		itemOpts.space.marginRight = itemOpts.PageWidth - itemOpts.pageRightMargin() - item.x - item.width
 		itemPages := []Page{{Number: 1}}
 		endY := item.layout(&itemPages, itemOpts)
 		streams = append(streams, fragmentStream{pages: itemPages, endY: endY, hasRoot: true, alignment: item.alignment})
