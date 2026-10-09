@@ -242,6 +242,11 @@ func imageStream(r *images.Raster) string {
 			r.Width, r.Height, r.Space, len(r.Raw), r.Raw)
 	}
 	comp := flateBytes(r.Pixels)
+	if r.Format == "png" && len(r.FlateData) > 0 && len(r.FlateData) < len(comp) {
+		return fmt.Sprintf(
+			"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns %d >> /Length %d >>\nstream\n%s\nendstream",
+			r.Width, r.Height, r.Width, len(r.FlateData), r.FlateData)
+	}
 	return fmt.Sprintf(
 		"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length %d >>\nstream\n%s\nendstream",
 		r.Width, r.Height, len(comp), comp)

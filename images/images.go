@@ -3,6 +3,7 @@ package images
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"image"
 	"image/color"
@@ -12,12 +13,13 @@ import (
 
 // Raster contains either RGB pixels or original JPEG bytes for PDF passthrough.
 type Raster struct {
-	Format string // "png" | "jpeg"
-	Space  string // "DeviceRGB" | "DeviceGray" | "" (pass-through JPEG only)
-	Width  int
-	Height int
-	Pixels []byte // RGB, len = W*H*3
-	Raw    []byte // bytes originales (passthrough JPEG)
+	Format    string // "png" | "jpeg"
+	Space     string // "DeviceRGB" | "DeviceGray" | "" (pass-through JPEG only)
+	Width     int
+	Height    int
+	Pixels    []byte // RGB, len = W*H*3
+	Raw       []byte // bytes originales (passthrough JPEG)
+	FlateData []byte // original PNG RGB scanlines with PNG row filters, zlib-compressed
 }
 
 // Decode converts PNG bytes to RGB and preserves supported JPEG data for passthrough.
@@ -70,5 +72,45 @@ func Decode(data []byte) (*Raster, error) {
 			)
 		}
 	}
-	return &Raster{Format: format, Space: space, Width: w, Height: h, Pixels: px, Raw: data}, nil
+	return &Raster{Format: format, Space: space, Width: w, Height: h, Pixels: px, Raw: data, FlateData: pngRGBFlateData(data)}, nil
+}
+
+func pngRGBFlateData(data []byte) []byte {
+	if len(data) < 8 || !bytes.Equal(data[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+		return nil
+	}
+	var out bytes.Buffer
+	var width uint32
+	validRGB := false
+	transparent := false
+	for offset := 8; offset+12 <= len(data); {
+		size := binary.BigEndian.Uint32(data[offset : offset+4])
+		end := uint64(offset) + 12 + uint64(size)
+		if end > uint64(len(data)) {
+			return nil
+		}
+		kind := string(data[offset+4 : offset+8])
+		chunk := data[offset+8 : offset+8+int(size)]
+		switch kind {
+		case "IHDR":
+			if len(chunk) != 13 || chunk[8] != 8 || chunk[9] != 2 || chunk[12] != 0 {
+				return nil
+			}
+			width = binary.BigEndian.Uint32(chunk[:4])
+			validRGB = width > 0
+		case "tRNS":
+			transparent = true
+		case "IDAT":
+			if validRGB && !transparent {
+				out.Write(chunk)
+			}
+		case "IEND":
+			if validRGB && !transparent && out.Len() > 0 {
+				return out.Bytes()
+			}
+			return nil
+		}
+		offset = int(end)
+	}
+	return nil
 }

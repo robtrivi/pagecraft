@@ -3,11 +3,14 @@ package render
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	pngstd "image/png"
 	"strings"
 	"testing"
+
+	"github.com/robtrivi/pagecraft-go/images"
 )
 
 // Image step 4: <img> is embedded as an Image XObject and invoked with Do.
@@ -25,6 +28,33 @@ func pngURI(t *testing.T, w, h int) string {
 		t.Fatalf("encode: %v", err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
+func TestRender_OpaqueRGBPNGUsesPDFPredictor(t *testing.T) {
+	compressed := []byte{0x78, 0x9c, 0x01, 0x02, 0x03}
+	got := imageStream(&images.Raster{Format: "png", Width: 4, Height: 2, FlateData: compressed})
+	for _, want := range []string{"/Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns 4", "/Length 5"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("PNG PDF stream missing %q", want)
+		}
+	}
+	if !strings.Contains(got, string(compressed)) {
+		t.Error("PDF stream does not contain the preserved PNG data")
+	}
+}
+
+func TestRender_RGBPNGFallsBackWhenPredictorStreamIsLarger(t *testing.T) {
+	raster := &images.Raster{
+		Format: "png", Width: 10, Height: 10,
+		Pixels: bytes.Repeat([]byte{0}, 300), FlateData: bytes.Repeat([]byte{1}, 1000),
+	}
+	got := imageStream(raster)
+	if strings.Contains(got, "/Predictor 15") {
+		t.Fatal("larger source PNG stream must not increase the PDF image size")
+	}
+	if !strings.Contains(got, fmt.Sprintf("/Length %d", len(flateBytes(raster.Pixels)))) {
+		t.Fatal("RGB fallback stream was not used")
+	}
 }
 
 func TestRender_EmbedsImage_AsXObject(t *testing.T) {

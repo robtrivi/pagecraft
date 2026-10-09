@@ -2,6 +2,9 @@ package images
 
 import (
 	"bytes"
+	"compress/zlib"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -24,6 +27,81 @@ func makePNG(t *testing.T, w, h int, c color.Color) []byte {
 		t.Fatalf("encode png: %v", err)
 	}
 	return buf.Bytes()
+}
+
+func makeRGBPNG(t *testing.T, w, h int) ([]byte, []byte) {
+	t.Helper()
+	rows := make([]byte, h*(w*3+1))
+	for y := 0; y < h; y++ {
+		row := y * (w*3 + 1)
+		rows[row] = 1 // PNG filter: Sub.
+		for x := 0; x < w; x++ {
+			pixel := row + 1 + x*3
+			red, green := byte(x*20), byte(y*30)
+			if x == 0 {
+				rows[pixel], rows[pixel+1], rows[pixel+2] = red, green, 200
+			} else {
+				rows[pixel], rows[pixel+1], rows[pixel+2] = 20, 0, 0
+			}
+		}
+	}
+	var compressed bytes.Buffer
+	zw := zlib.NewWriter(&compressed)
+	if _, err := zw.Write(rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	out.Write([]byte{137, 80, 78, 71, 13, 10, 26, 10})
+	writeChunk := func(kind string, data []byte) {
+		_ = binary.Write(&out, binary.BigEndian, uint32(len(data)))
+		out.WriteString(kind)
+		out.Write(data)
+		checksum := crc32.ChecksumIEEE(append([]byte(kind), data...))
+		_ = binary.Write(&out, binary.BigEndian, checksum)
+	}
+	ihdr := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdr, uint32(w))
+	binary.BigEndian.PutUint32(ihdr[4:], uint32(h))
+	ihdr[8], ihdr[9] = 8, 2 // 8-bit truecolor RGB.
+	writeChunk("IHDR", ihdr)
+	writeChunk("IDAT", compressed.Bytes())
+	writeChunk("IEND", nil)
+	return out.Bytes(), compressed.Bytes()
+}
+
+func TestImages_DecodeOpaqueRGBPNG_PreservesFilteredStream(t *testing.T) {
+	source, compressed := makeRGBPNG(t, 64, 64)
+	got, err := Decode(source)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if !bytes.Equal(got.FlateData, compressed) {
+		t.Fatal("the original filtered PNG stream was not preserved")
+	}
+	var rgbCompressed bytes.Buffer
+	rgbWriter := zlib.NewWriter(&rgbCompressed)
+	if _, err := rgbWriter.Write(got.Pixels); err != nil {
+		t.Fatal(err)
+	}
+	if err := rgbWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.FlateData) >= rgbCompressed.Len() {
+		t.Fatalf("test PNG predictor stream (%d bytes) should beat raw RGB stream (%d bytes)", len(got.FlateData), rgbCompressed.Len())
+	}
+}
+
+func TestImages_DecodeRGBAImage_UsesFlattenedPixels(t *testing.T) {
+	got, err := Decode(makePNG(t, 1, 1, color.RGBA{R: 200, A: 128}))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if len(got.FlateData) != 0 {
+		t.Fatal("an image with alpha must use the existing white-flattened RGB representation")
+	}
 }
 
 func TestImages_DecodePNG_ReturnsDimsAndPixels(t *testing.T) {
