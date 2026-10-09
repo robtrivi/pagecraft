@@ -412,7 +412,7 @@ func flowGrid(g *boxes.Box, y float64, pages *[]Page, opts Options, usable, bott
 				continue
 			case gridRowBreakMove:
 				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-				rowFragment := placeFragmentUnit(fragmentUnit{height: rowExtent}, y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, pages)
+				rowFragment := placeFragmentUnitForPage(fragmentUnit{height: rowExtent}, y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, pages, opts)
 				y = rowFragment.y
 			}
 		}

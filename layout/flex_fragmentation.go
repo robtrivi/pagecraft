@@ -97,7 +97,7 @@ func flowFlexSubtreesAcrossPages(f *boxes.Box, row flexRow, y float64, widths []
 				}
 				if item.Image != nil {
 					pageHasContent := (*itemPages)[0].blockCount() > 0
-					fragment := placeFragmentUnit(fragmentUnit{height: heights[index]}, y, opts.top(), bottom, pageHasContent, itemPages)
+					fragment := placeFragmentUnitForPage(fragmentUnit{height: heights[index]}, y, opts.top(), bottom, pageHasContent, itemPages, opts)
 					ensurePageIndex(itemPages, fragment.pageOffset)
 					imageWidth, imageHeight := rasterDimensions(item, math.Max(0, itemWidth-horizontalInsets(item)), 0)
 					(*itemPages)[fragment.pageOffset].emitBlock(placed(item, item.Text, item.Image, itemX, fragment.y, imageWidth, imageHeight, fontSizes[index], faces[index]))
@@ -146,7 +146,7 @@ func insertFlexContainerFragments(f *boxes.Box, pages *[]Page, firstPage, firstB
 func placeFlexRowOnFreshPage(f *boxes.Box, rowHeight, y, bottom float64, pages *[]Page, opts Options) float64 {
 	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 	pageTop := opts.top() + f.Style.MarginTop + f.Style.BorderTop.Width + f.Style.PaddingTop
-	fragment := placeFragmentUnit(fragmentUnit{height: rowHeight}, y, pageTop, bottom, pageHasContent, pages)
+	fragment := placeFragmentUnitForPage(fragmentUnit{height: rowHeight}, y, pageTop, bottom, pageHasContent, pages, opts)
 	return fragment.y
 }
 
@@ -159,9 +159,15 @@ func flowFlexRowAcrossPages(f *boxes.Box, row flexRow, y float64, widths []float
 	}
 	pageBase := len(*pages) - 1
 	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-	fragments := planFragments(make([]fragmentUnit, lineCount), y, opts.top()+f.Style.MarginTop, bottom, pageHasContent, func(firstLine, endLine int) float64 {
+	measure := func(firstLine, endLine int) float64 {
 		return flexRowFragmentHeight(f, row, lines, heights, firstLine, endLine, firstLine == 0, endLine == lineCount, opts)
-	})
+	}
+	var fragments []fragmentRange
+	if len(opts.PageRules) != 0 {
+		fragments = planFragmentsByPage(make([]fragmentUnit, lineCount), y, pageHasContent, pageBoundsForOptions(opts, pageBase, f.Style.MarginTop), measure)
+	} else {
+		fragments = planFragments(make([]fragmentUnit, lineCount), y, opts.top()+f.Style.MarginTop, bottom, pageHasContent, measure)
+	}
 	for _, fragment := range fragments {
 		ensurePageIndex(pages, pageBase+fragment.pageOffset)
 		firstLine, lastLine := fragment.first, fragment.end

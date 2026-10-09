@@ -228,7 +228,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 		rowUnit := fragmentUnit{height: rh}
 		rowUnit.breakBefore = rowBreakBefore
 		pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-		rowFragment := placeFragmentUnit(rowUnit, y, opts.top(), bottom, pageHasContent, pages)
+		rowFragment := placeFragmentUnitForPage(rowUnit, y, opts.top(), bottom, pageHasContent, pages, opts)
 		if rowFragment.pageOffset > 0 {
 			y = rowFragment.y
 			// Repeat headers when a new table page starts.

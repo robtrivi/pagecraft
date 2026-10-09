@@ -20,6 +20,11 @@ type Options struct {
 	PageRotation          int
 	PageBleed             float64
 	PageMarks             css.PageMarks
+	PageRules             []css.PageRule
+	pageNumber            int
+	pageStyle             css.PageStyle
+	pageBodyMargin        float64
+	pageDefaults          *pageGeometryDefaults
 	Margin                float64 // equal on all four sides (v0.3)
 	PageMargins           css.PageMargins
 	space                 layoutSpace
@@ -34,11 +39,89 @@ type Options struct {
 	tableOpacityCache     map[*boxes.Box]OpacityGroup
 }
 
+type pageGeometryDefaults struct {
+	width, height, margin float64
+	margins               css.PageMargins
+	background            [4]float64
+	hasBackground         bool
+	rotation              int
+	bleed                 float64
+	marks                 css.PageMarks
+}
+
 func (or Options) left() float64  { return or.pageLeftMargin() + or.space.marginLeft }
 func (or Options) right() float64 { return or.pageRightMargin() + or.space.marginRight }
 func (or Options) top() float64   { return or.pageTopMargin() + or.space.marginTop }
 func (or Options) pageBottom() float64 {
 	return or.PageHeight - or.pageBottomMargin() - or.space.marginBottom
+}
+
+func (or Options) forPage(pageNumber int) Options {
+	if pageNumber < 1 {
+		pageNumber = 1
+	}
+	style := css.ResolvePageStyle(or.PageRules, "", pageNumber)
+	if or.pageDefaults != nil && or.pageNumber == pageNumber {
+		return or
+	}
+	if or.pageNumber != 0 && or.pageNumber != pageNumber && or.pageStyle == style {
+		or.pageNumber = pageNumber
+		return or
+	}
+	if or.pageDefaults == nil {
+		or.pageDefaults = &pageGeometryDefaults{or.PageWidth, or.PageHeight, or.Margin, or.PageMargins, or.PageBackground, or.HasPageBackground, or.PageRotation, or.PageBleed, or.PageMarks}
+	}
+	defaults := or.pageDefaults
+	or.PageWidth, or.PageHeight, or.Margin, or.PageMargins = defaults.width, defaults.height, defaults.margin, defaults.margins
+	or.PageBackground, or.HasPageBackground = defaults.background, defaults.hasBackground
+	or.PageRotation, or.PageBleed, or.PageMarks = defaults.rotation, defaults.bleed, defaults.marks
+	or.pageNumber = pageNumber
+	if style.HasSize {
+		or.PageWidth, or.PageHeight = style.Width, style.Height
+	}
+	margins := style.Margins.Resolve(or.PageWidth, or.PageHeight)
+	if margins.HasTop {
+		or.PageMargins.Top, or.PageMargins.HasTop = margins.Top, true
+	}
+	if margins.HasRight {
+		or.PageMargins.Right, or.PageMargins.HasRight = margins.Right, true
+	}
+	if margins.HasBottom {
+		or.PageMargins.Bottom, or.PageMargins.HasBottom = margins.Bottom, true
+	}
+	if margins.HasLeft {
+		or.PageMargins.Left, or.PageMargins.HasLeft = margins.Left, true
+	}
+	if style.HasBackground {
+		or.PageBackground, or.HasPageBackground = style.Background, true
+	}
+	if style.HasRotation {
+		or.PageRotation = style.Rotation
+	}
+	if style.HasBleed {
+		or.PageBleed = style.Bleed
+	}
+	if style.HasMarks {
+		or.PageMarks = style.Marks
+	}
+	or.pageStyle = style
+	left, right := or.Margin, or.Margin
+	top, bottom := or.Margin, or.Margin
+	if or.PageMargins.HasLeft {
+		left = or.PageMargins.Left
+	}
+	if or.PageMargins.HasRight {
+		right = or.PageMargins.Right
+	}
+	if or.PageMargins.HasTop {
+		top = or.PageMargins.Top
+	}
+	if or.PageMargins.HasBottom {
+		bottom = or.PageMargins.Bottom
+	}
+	or.space = or.space.withPageMargins(left, right, top, bottom).withBodyMargin(or.pageBodyMargin)
+	or.Margin += or.pageBodyMargin
+	return or
 }
 
 func (or Options) pageLeftMargin() float64 {
@@ -307,10 +390,28 @@ func resolveSize(b *boxes.Box, opts Options) float64 {
 // Blocks and Fragments are flat views published when Flow completes.
 type Page struct {
 	Number        int
+	Geometry      PageGeometry
 	Blocks        []PlacedBox
 	Fragments     []BoxFragment
 	FragmentTree  []*FragmentNode
 	fragmentState *pageFragmentState
+}
+
+// PageGeometry is the resolved physical and content geometry for one output page.
+type PageGeometry struct {
+	Width, Height float64
+	Margins       css.PageMargins
+	Background    [4]float64
+	HasBackground bool
+	Rotation      int
+	Bleed         float64
+	Marks         css.PageMarks
+}
+
+func pageGeometryFromOptions(opts Options) PageGeometry {
+	return PageGeometry{Width: opts.PageWidth, Height: opts.PageHeight, Margins: opts.PageMargins,
+		Background: opts.PageBackground, HasBackground: opts.HasPageBackground, Rotation: opts.PageRotation,
+		Bleed: opts.PageBleed, Marks: opts.PageMarks}
 }
 
 // BoxFragment describes one placed piece of a source box. PaintIndex addresses
@@ -361,33 +462,44 @@ type FragmentBounds struct {
 // block does not fit in the remaining content area.
 func Flow(root *boxes.Box, opts Options) []Page {
 	boxes.AssignSourcePaths(root)
+	opts.pageBodyMargin = root.Style.BodyMargin
 	groupSequence := 0
 	opts.groupSequence = &groupSequence
 	pages, _ := flowLayout(root, opts)
+	for i := range pages {
+		pageOpts := opts
+		if len(opts.PageRules) != 0 {
+			pageOpts = opts.forPage(i + 1)
+		}
+		pages[i].Geometry = pageGeometryFromOptions(pageOpts)
+	}
 	finalizePageFragments(root, pages)
 	return pages
 }
 
 func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
-	if !opts.space.pageMarginSet {
-		bodyMargin := root.Style.BodyMargin
-		left, right := opts.Margin, opts.Margin
-		top, bottom := opts.Margin, opts.Margin
-		if opts.PageMargins.HasLeft {
-			left = opts.PageMargins.Left
+	if len(opts.PageRules) != 0 {
+		opts.pageBodyMargin = root.Style.BodyMargin
+		opts = opts.forPage(1)
+	} else {
+		if !opts.space.pageMarginSet {
+			left, right, top, bottom := opts.Margin, opts.Margin, opts.Margin, opts.Margin
+			if opts.PageMargins.HasLeft {
+				left = opts.PageMargins.Left
+			}
+			if opts.PageMargins.HasRight {
+				right = opts.PageMargins.Right
+			}
+			if opts.PageMargins.HasTop {
+				top = opts.PageMargins.Top
+			}
+			if opts.PageMargins.HasBottom {
+				bottom = opts.PageMargins.Bottom
+			}
+			opts.space = opts.space.withPageMargins(left, right, top, bottom).withBodyMargin(root.Style.BodyMargin)
 		}
-		if opts.PageMargins.HasRight {
-			right = opts.PageMargins.Right
-		}
-		if opts.PageMargins.HasTop {
-			top = opts.PageMargins.Top
-		}
-		if opts.PageMargins.HasBottom {
-			bottom = opts.PageMargins.Bottom
-		}
-		opts.space = opts.space.withPageMargins(left, right, top, bottom).withBodyMargin(bodyMargin)
+		opts.Margin += root.Style.BodyMargin
 	}
-	opts.Margin += root.Style.BodyMargin
 	usable := opts.PageWidth - opts.left() - opts.right()
 	bottom := opts.pageBottom()
 	if opts.Faces == nil {
@@ -404,6 +516,14 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 	var previousBlockMarginBottom float64
 	hasPreviousBlock := false
 	for bi, b := range root.Children {
+		if len(opts.PageRules) != 0 {
+			opts = opts.forPage(len(pages))
+		}
+		usable = opts.PageWidth - opts.left() - opts.right()
+		bottom = opts.pageBottom()
+		if pages[len(pages)-1].blockCount() == 0 && len(pages) > 1 {
+			y = opts.top()
+		}
 		if b.Style.Position == boxes.PositionFixed {
 			fixed = append(fixed, b)
 			continue
@@ -414,6 +534,11 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 		}
 		if hasForcedPageBreakBefore(root.Children, bi) {
 			y = forcePageBreak(y, opts, bottom, &pages)
+			if len(opts.PageRules) != 0 {
+				opts = opts.forPage(len(pages))
+			}
+			usable = opts.PageWidth - opts.left() - opts.right()
+			bottom = opts.pageBottom()
 			previousBlockMarginBottom, hasPreviousBlock = 0, false
 		}
 		if b.Style.Float == boxes.FloatNone && b.Style.Clear != boxes.ClearNone {
@@ -470,7 +595,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			}
 			if bi+1 < len(root.Children) && shouldMoveDecoratedBlockWithFollowingLines(b, root.Children[bi+1], y+topGap, usable, bottom, opts) {
 				pageHasContent := pages[len(pages)-1].blockCount() > 0
-				fragment := placeFragmentUnit(fragmentUnit{breakBefore: fragmentBreakPage}, y+topGap, opts.top(), bottom, pageHasContent, &pages)
+				fragment := placeFragmentUnitForPage(fragmentUnit{breakBefore: fragmentBreakPage}, y+topGap, opts.top(), bottom, pageHasContent, &pages, opts)
 				if fragment.pageOffset > 0 {
 					y = fragment.y
 					previousBlockMarginBottom, hasPreviousBlock = 0, false
@@ -495,6 +620,11 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 		for idx, it := range items {
 			if hasForcedPageBreakBefore(items, idx) {
 				y = forcePageBreak(y, opts, bottom, &pages)
+				if len(opts.PageRules) != 0 {
+					opts = opts.forPage(len(pages))
+				}
+				usable = opts.PageWidth - opts.left() - opts.right()
+				bottom = opts.pageBottom()
 				previousBlockMarginBottom, hasPreviousBlock = 0, false
 			}
 			if it.Style.Float == boxes.FloatNone && it.Style.Clear != boxes.ClearNone {
@@ -623,7 +753,11 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			if img == nil && vector == nil && len(floatsOnPage(floats, pageIdx)) == 0 &&
 				canFragmentTextBlock(it) && y+height > bottom &&
 				!breakInsideAvoidFits(it.Style.BreakInside, height, bottom-opts.top()) {
-				y = flowInlineBlockFragments(it, linesW, bx, bw, y, bottom, &pages, opts)
+				if len(opts.PageRules) != 0 {
+					y = flowResponsiveInlineFragments(it, words, y, &pages, opts)
+				} else {
+					y = flowInlineBlockFragments(it, linesW, bx, bw, y, bottom, &pages, opts)
+				}
 				y += it.Style.MarginBottom
 				previousBlockMarginBottom = it.Style.MarginBottom
 				hasPreviousBlock = true
@@ -631,7 +765,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			}
 			if y+height > bottom {
 				pageHasContent := pages[len(pages)-1].blockCount() > 0
-				fragment := placeFragmentUnit(fragmentUnit{height: height}, y, opts.top(), bottom, pageHasContent, &pages)
+				fragment := placeFragmentUnitForPage(fragmentUnit{height: height}, y, opts.top(), bottom, pageHasContent, &pages, opts)
 				y = fragment.y
 			}
 			var runs [][]TextRun
@@ -698,7 +832,15 @@ func hasForcedPageBreakBefore(siblings []*boxes.Box, index int) bool {
 }
 
 func forcePageBreak(y float64, opts Options, bottom float64, pages *[]Page) float64 {
-	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-	fragment := placeFragmentUnit(fragmentUnit{breakBefore: fragmentBreakPage}, y, opts.top(), bottom, pageHasContent, pages)
-	return fragment.y
+	if len(opts.PageRules) == 0 {
+		pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
+		fragment := placeFragmentUnitForPage(fragmentUnit{breakBefore: fragmentBreakPage}, y, opts.top(), bottom, pageHasContent, pages, opts)
+		return fragment.y
+	}
+	current := len(*pages) - 1
+	if (*pages)[current].blockCount() == 0 && y <= opts.top()+fragmentEpsilon {
+		return y
+	}
+	ensurePageIndex(pages, current+1)
+	return opts.forPage(current + 2).top()
 }

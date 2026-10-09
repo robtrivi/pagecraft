@@ -62,10 +62,15 @@ type fragmentBreakToken struct {
 // planFragments applies page break constraints to the measured sequence. Layout
 // modes provide their own units and sizes; this function owns page advancement.
 func planFragments(units []fragmentUnit, y, pageTop, pageBottom float64, pageHasContent bool, measure func(first, end int) float64) []fragmentRange {
+	return planFragmentsByPage(units, y, pageHasContent, func(int) (float64, float64) { return pageTop, pageBottom }, measure)
+}
+
+// planFragmentsByPage plans continuations against the geometry of each destination page.
+func planFragmentsByPage(units []fragmentUnit, y float64, pageHasContent bool, bounds func(pageOffset int) (top, bottom float64), measure func(first, end int) float64) []fragmentRange {
 	fragments := make([]fragmentRange, 0, 1)
 	token := fragmentBreakToken{y: y, pageHasContent: pageHasContent}
 	for token.nextUnit < len(units) {
-		fragment, next := planNextFragment(units, token, pageTop, pageBottom, measure)
+		fragment, next := planNextFragmentByPage(units, token, bounds, measure)
 		fragments = append(fragments, fragment)
 		token = next
 	}
@@ -76,16 +81,23 @@ func planFragments(units []fragmentUnit, y, pageTop, pageBottom float64, pageHas
 // continue at the next unit. Break retries stay inside this operation so the
 // caller only observes accepted fragment boundaries.
 func planNextFragment(units []fragmentUnit, token fragmentBreakToken, pageTop, pageBottom float64, measure func(first, end int) float64) (fragmentRange, fragmentBreakToken) {
+	return planNextFragmentByPage(units, token, func(int) (float64, float64) { return pageTop, pageBottom }, measure)
+}
+
+func planNextFragmentByPage(units []fragmentUnit, token fragmentBreakToken, bounds func(pageOffset int) (top, bottom float64), measure func(first, end int) float64) (fragmentRange, fragmentBreakToken) {
 	for {
+		pageTop, pageBottom := bounds(token.pageOffset)
 		first := token.nextUnit
 		if forcedBreakBefore(units, first) && (token.pageHasContent || token.y > pageTop+fragmentEpsilon) {
 			token.pageOffset++
-			token.y = pageTop
+			token.y, _ = bounds(token.pageOffset)
 			token.pageHasContent = false
+			continue
 		}
-		if moveKeepGroupToFreshPage(units, first, token.y, pageTop, pageBottom, token.pageHasContent, measure) {
+		freshTop, freshBottom := bounds(token.pageOffset + 1)
+		if moveKeepGroupToFreshPage(units, first, token.y, pageTop, pageBottom, freshTop, freshBottom, token.pageHasContent, measure) {
 			token.pageOffset++
-			token.y = pageTop
+			token.y = freshTop
 			token.pageHasContent = false
 			continue
 		}
@@ -129,7 +141,7 @@ func planNextFragment(units []fragmentUnit, token fragmentBreakToken, pageTop, p
 
 		if adjusted, adjustedHeight, retry := enforceWidowsOrphans(units, first, end, height, token.y, pageTop, measure); retry {
 			token.pageOffset++
-			token.y = pageTop
+			token.y, _ = bounds(token.pageOffset)
 			token.pageHasContent = false
 			continue
 		} else if adjusted > 0 {
@@ -145,7 +157,7 @@ func planNextFragment(units []fragmentUnit, token fragmentBreakToken, pageTop, p
 		}
 		if end < len(units) {
 			next.pageOffset++
-			next.y = pageTop
+			next.y, _ = bounds(next.pageOffset)
 			next.pageHasContent = false
 		}
 		return fragment, next
@@ -156,6 +168,24 @@ func placeFragmentUnit(unit fragmentUnit, y, pageTop, pageBottom float64, pageHa
 	fragment := planFragments([]fragmentUnit{unit}, y, pageTop, pageBottom, pageHasContent, nil)[0]
 	ensurePageIndex(pages, len(*pages)-1+fragment.pageOffset)
 	return fragment
+}
+
+func placeFragmentUnitForPage(unit fragmentUnit, y, pageTop, pageBottom float64, pageHasContent bool, pages *[]Page, opts Options) fragmentRange {
+	if len(opts.PageRules) == 0 {
+		return placeFragmentUnit(unit, y, pageTop, pageBottom, pageHasContent, pages)
+	}
+	pageBase := len(*pages) - 1
+	bounds := pageBoundsForOptions(opts, pageBase, pageTop-opts.top())
+	fragment := planFragmentsByPage([]fragmentUnit{unit}, y, pageHasContent, bounds, nil)[0]
+	ensurePageIndex(pages, pageBase+fragment.pageOffset)
+	return fragment
+}
+
+func pageBoundsForOptions(opts Options, pageBase int, topInset float64) func(offset int) (float64, float64) {
+	return func(offset int) (float64, float64) {
+		pageOpts := opts.forPage(pageBase + offset + 1)
+		return pageOpts.top() + topInset, pageOpts.pageBottom()
+	}
 }
 
 func forcedBreakBefore(units []fragmentUnit, index int) bool {
@@ -183,7 +213,7 @@ func keepRange(units []fragmentUnit, index int) (int, int, bool) {
 	return start, end, kept
 }
 
-func moveKeepGroupToFreshPage(units []fragmentUnit, start int, y, top, bottom float64, pageHasContent bool, measure func(first, end int) float64) bool {
+func moveKeepGroupToFreshPage(units []fragmentUnit, start int, y, top, bottom, freshTop, freshBottom float64, pageHasContent bool, measure func(first, end int) float64) bool {
 	groupStart, groupEnd, keep := keepRange(units, start)
 	if (y <= top+fragmentEpsilon && !pageHasContent) || !keep {
 		return false
@@ -192,7 +222,7 @@ func moveKeepGroupToFreshPage(units []fragmentUnit, start int, y, top, bottom fl
 		groupStart = start
 	}
 	groupHeight := measureFragmentRange(units, groupStart, groupEnd, measure)
-	return groupHeight <= bottom-top+fragmentEpsilon && groupHeight > bottom-y+fragmentEpsilon
+	return groupHeight <= freshBottom-freshTop+fragmentEpsilon && groupHeight > bottom-y+fragmentEpsilon
 }
 
 func measureFragmentRange(units []fragmentUnit, first, end int, measure func(first, end int) float64) float64 {

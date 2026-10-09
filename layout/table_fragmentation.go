@@ -28,7 +28,7 @@ func fragmentTableRow(done []tableDoneCell, y, pageTop, pageBottom float64, brea
 	repeatAtStart := false
 	if breakBefore == fragmentBreakPage {
 		pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-		forced := placeFragmentUnit(fragmentUnit{breakBefore: breakBefore}, y, pageTop, pageBottom, pageHasContent, pages)
+		forced := placeFragmentUnitForPage(fragmentUnit{breakBefore: breakBefore}, y, pageTop, pageBottom, pageHasContent, pages, opts)
 		y = forced.y
 		repeatAtStart = forced.pageOffset > 0
 	}

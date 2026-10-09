@@ -16,14 +16,15 @@ type linkAnnot struct {
 func collectLinks(pages []layout.Page, pageH float64) ([]linkAnnot, map[int][]int) {
 	var annots []linkAnnot
 	byPage := map[int][]int{}
-	add := func(pi int, x, topY, w, h float64, uri string) {
-		byPage[pi] = append(byPage[pi], len(annots))
-		annots = append(annots, linkAnnot{
-			rect: [4]float64{x, pageH - topY - h, x + w, pageH - topY},
-			uri:  uri,
-		})
-	}
 	for pi, pg := range pages {
+		pageHeight := pg.Geometry.Height
+		if pageHeight == 0 {
+			pageHeight = pageH
+		}
+		addForPage := func(x, topY, w, h float64, uri string) {
+			byPage[pi] = append(byPage[pi], len(annots))
+			annots = append(annots, linkAnnot{rect: [4]float64{x, pageHeight - topY - h, x + w, pageHeight - topY}, uri: uri})
+		}
 		for _, b := range pg.Blocks {
 			if len(b.Runs) > 0 {
 				for _, ln := range b.Runs {
@@ -31,7 +32,7 @@ func collectLinks(pages []layout.Page, pageH float64) ([]linkAnnot, map[int][]in
 						if r.Link == "" {
 							continue
 						}
-						add(pi, r.X, r.Y, r.Width, r.LineH, r.Link)
+						addForPage(r.X, r.Y, r.Width, r.LineH, r.Link)
 					}
 				}
 				continue
@@ -39,7 +40,7 @@ func collectLinks(pages []layout.Page, pageH float64) ([]linkAnnot, map[int][]in
 			if b.Link == "" {
 				continue
 			}
-			add(pi, b.X, b.Y, b.Width, b.Height, b.Link)
+			addForPage(b.X, b.Y, b.Width, b.Height, b.Link)
 		}
 	}
 	return annots, byPage

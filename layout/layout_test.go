@@ -9,6 +9,79 @@ import (
 	"github.com/robtrivi/pagecraft-go/text"
 )
 
+func TestLayout_PageContextResolvesMarginsAfterExplicitPageBreak(t *testing.T) {
+	root, err := boxes.Build(`<style>@page { size: 200pt 200pt; margin: 10pt } @page :left { size: 250pt 230pt; margin-left: 30pt; margin-top: 25pt } body { margin: 0 } p { margin: 0 }</style><p>A</p><p style="break-before:page">B</p>`)
+	if err != nil {
+		t.Fatalf("boxes.Build: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 200, 10
+	opts.Measure, opts.MeasureBold = text.Measure, text.MeasureBold
+	opts.PageMargins = root.Page.Margins
+	opts.PageRules = root.PageRules
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("got %d pages, want 2", len(pages))
+	}
+	if got := pages[1].Blocks[0].X; got != 30 {
+		t.Errorf("second page x = %g, want left page margin 30", got)
+	}
+	if got := pages[1].Blocks[0].Y; got != 25 {
+		t.Errorf("second page y = %g, want left page top margin 25", got)
+	}
+	if pages[1].Geometry.Width != 250 || pages[1].Geometry.Height != 230 {
+		t.Errorf("second page geometry = %gx%g, want 250x230", pages[1].Geometry.Width, pages[1].Geometry.Height)
+	}
+}
+
+func TestLayout_ParagraphContinuationUsesDestinationPageCapacity(t *testing.T) {
+	root, err := boxes.Build(`<style>@page { size: 200pt 60pt; margin: 10pt } @page :left { size: 200pt 100pt; margin: 20pt 10pt 10pt } body { margin: 0 } p { margin: 0; font: 10pt/10pt Helvetica }</style><p>A<br>B<br>C<br>D<br>E<br>F</p>`)
+	if err != nil {
+		t.Fatalf("boxes.Build: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.Measure, opts.MeasureBold = text.Measure, text.MeasureBold
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 60, 10
+	opts.PageMargins, opts.PageRules = root.Page.Margins, root.PageRules
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("got %d pages, want 2", len(pages))
+	}
+	if pages[0].Blocks[0].Text != "A\nB\nC\nD" {
+		t.Errorf("first fragment text=%q", pages[0].Blocks[0].Text)
+	}
+	if pages[1].Blocks[0].Text != "E\nF" {
+		t.Errorf("second fragment text=%q", pages[1].Blocks[0].Text)
+	}
+	if pages[1].Blocks[0].Y != 20 || pages[1].Geometry.Height != 100 {
+		t.Errorf("second fragment page geometry=%+v block=%+v", pages[1].Geometry, pages[1].Blocks[0])
+	}
+}
+
+func TestLayout_ParagraphContinuationReflowsForDestinationPageWidth(t *testing.T) {
+	root, err := boxes.Build(`<style>@page { size: 100pt 35pt; margin: 5pt } @page :left { size: 60pt 130pt; margin: 5pt } body { margin: 0 } p { margin: 0; font: 10pt/10pt Helvetica }</style><p>alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau</p>`)
+	if err != nil {
+		t.Fatalf("boxes.Build: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.Measure, opts.MeasureBold = text.Measure, text.MeasureBold
+	opts.PageWidth, opts.PageHeight, opts.Margin = 100, 35, 5
+	opts.PageMargins, opts.PageRules = root.Page.Margins, root.PageRules
+	pages := Flow(root, opts)
+	if len(pages) < 2 {
+		t.Fatalf("got %d pages, want a continuation", len(pages))
+	}
+	if pages[1].Geometry.Width != 60 || pages[1].Blocks[0].Width > 50+fragmentEpsilon {
+		t.Errorf("continuation did not use the narrower content width: geometry=%+v block=%+v", pages[1].Geometry, pages[1].Blocks[0])
+	}
+	text := pages[0].Blocks[0].Text + " " + pages[1].Blocks[0].Text
+	for _, word := range []string{"alpha", "lambda", "tau"} {
+		if !strings.Contains(text, word) {
+			t.Errorf("continuation lost %q: %q", word, text)
+		}
+	}
+}
+
 func TestLayout_FlexHeaderDoesNotAddExtraGapBeforeFollowingBlock(t *testing.T) {
 	html := `<style>@page{size:612pt 792pt;margin:34pt}body{margin:0;font:9pt/13pt Helvetica}.mast{display:flex;justify-content:space-between;border-bottom:2pt solid #175b65;padding-bottom:8pt}.mast strong{font-size:14pt}.mast span{font-size:8pt}.eyebrow{font-size:7pt;margin-top:14pt}</style><header class="mast"><strong>MERIDIAN</strong><span>FIELD SERVICES / 2026.09</span></header><div class="eyebrow">INTERNAL REVIEW · REPORT 24-091</div>`
 	root, err := boxes.Build(string(html))

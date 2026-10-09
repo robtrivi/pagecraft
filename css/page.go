@@ -170,6 +170,17 @@ func ResolvePageStyle(rules []PageRule, name string, pageNumber int) PageStyle {
 	return ResolvePageRule(rules, name, pageNumber).Style
 }
 
+// ResolvePageDefaults cascades only unnamed, unqualified @page rules.
+func ResolvePageDefaults(rules []PageRule) PageStyle {
+	defaults := make([]PageRule, 0, len(rules))
+	for _, rule := range rules {
+		if rule.Selector.Name == "" && rule.Selector.Pseudo == "" {
+			defaults = append(defaults, rule)
+		}
+	}
+	return ResolvePageStyle(defaults, "", 1)
+}
+
 // ResolvePageRule cascades descriptors and margin-box declarations for one page context.
 func ResolvePageRule(rules []PageRule, name string, pageNumber int) PageRule {
 	result := PageRule{Selector: PageSelector{Name: name}, Declarations: Declarations{}, MarginBoxes: map[string]Declarations{}}

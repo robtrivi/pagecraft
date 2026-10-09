@@ -10,6 +10,31 @@ import (
 	"github.com/robtrivi/pagecraft-go/text"
 )
 
+func TestLayout_TableRowsUseDestinationPageCapacity(t *testing.T) {
+	root, err := boxes.Build(`<style>@page { size: 200pt 50pt; margin: 5pt } @page :left { size: 200pt 100pt; margin: 20pt 5pt 5pt } body { margin: 0 } table { margin: 0; width: 100pt } td { padding: 5pt; font: 10pt/10pt Helvetica }</style><table><tr><td>row-1</td></tr><tr><td>row-2</td></tr><tr><td>row-3</td></tr><tr><td>row-4</td></tr><tr><td>row-5</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("boxes.Build: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.Measure, opts.MeasureBold = text.Measure, text.MeasureBold
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 50, 5
+	opts.PageMargins, opts.PageRules = root.Page.Margins, root.PageRules
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("got %d pages, want 2 with larger continuation capacity", len(pages))
+	}
+	if pages[1].Geometry.Height != 100 {
+		t.Errorf("second page height=%g, want 100", pages[1].Geometry.Height)
+	}
+	found := false
+	for _, block := range pages[1].Blocks {
+		found = found || block.Text == "row-5"
+	}
+	if !found {
+		t.Error("last row was not placed on the larger second page")
+	}
+}
+
 // A simple 2 by 2 table creates four blocks,
 // equal columns, rows with increasing y. Not colspan/rowspan or nested tables.
 func TestLayout_SimpleTable_RendersRows(t *testing.T) {

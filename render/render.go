@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft-go/css"
 	"github.com/robtrivi/pagecraft-go/layout"
 	"github.com/robtrivi/pagecraft-go/text"
 )
@@ -24,17 +25,23 @@ func RenderHTMLToPDF(htmlStr string) ([]byte, error) {
 	opts.MeasureBold = text.MeasureBold
 	opts.Faces = root.Fonts
 	opts.FontVariants = root.FontVariants
-	if root.Page.Width > 0 && root.Page.Height > 0 {
-		opts.PageWidth, opts.PageHeight = root.Page.Width, root.Page.Height
+	basePage := css.ResolvePageDefaults(root.PageRules)
+	if basePage.HasSize {
+		opts.PageWidth, opts.PageHeight = basePage.Width, basePage.Height
 	}
-	opts.PageMargins = root.Page.Margins.Resolve(opts.PageWidth, opts.PageHeight)
-	opts.PageRotation = root.Page.Rotation
-	opts.PageBleed, opts.PageMarks = root.Page.Bleed, root.Page.Marks
-	if root.Page.HasMargin {
-		opts.Margin = root.Page.Margin
+	opts.PageRules = root.PageRules
+	opts.PageMargins = basePage.Margins.Resolve(opts.PageWidth, opts.PageHeight)
+	if basePage.HasRotation {
+		opts.PageRotation = basePage.Rotation
 	}
-	if root.Page.HasBackground {
-		opts.HasPageBackground, opts.PageBackground = true, root.Page.Background
+	if basePage.HasBleed {
+		opts.PageBleed = basePage.Bleed
+	}
+	if basePage.HasMarks {
+		opts.PageMarks = basePage.Marks
+	}
+	if basePage.HasBackground {
+		opts.HasPageBackground, opts.PageBackground = true, basePage.Background
 	} else {
 		opts.HasPageBackground, opts.PageBackground = root.Style.HasBg, root.Style.Bg
 	}

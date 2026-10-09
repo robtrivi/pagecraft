@@ -104,7 +104,7 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 			h := item.height
 			yc += it.Style.MarginTop
 			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-			fragment := placeFragmentUnit(fragmentUnit{height: h, breakBefore: pageBreakValue(it.Style.BreakBefore)}, yc, opts.top(), bottom, pageHasContent, pages)
+			fragment := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: pageBreakValue(it.Style.BreakBefore)}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 			yc = fragment.y
 			p := &(*pages)[len(*pages)-1]
 			columnX := opts.left() + float64(col)*(colW+gap)
@@ -246,7 +246,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 					h = lastLine.y + lastLine.height - yc + it.Style.BorderBottom.Width + it.Style.PaddingBottom
 				}
 				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-				fragmentPlan := placeFragmentUnit(fragmentUnit{height: h}, yc, opts.top(), bottom, pageHasContent, pages)
+				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 				lineShift := fragmentPlan.y - yc
 				yc = fragmentPlan.y
 				pb := placed(it, flexFragmentText(fragment), nil, columnX, yc, colW, h, fs, font)
@@ -283,7 +283,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			}
 			yc += marginGap
 			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-			fragmentPlan := placeFragmentUnit(fragmentUnit{height: item.height, breakBefore: pageBreakValue(it.Style.BreakBefore)}, yc, opts.top(), bottom, pageHasContent, pages)
+			fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: item.height, breakBefore: pageBreakValue(it.Style.BreakBefore)}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 			yc = fragmentPlan.y
 			pb := placed(it, it.Text, nil, columnX, yc, colW, item.height, fs, font)
 			pb.FragmentainerIndex = col + 1
@@ -443,7 +443,7 @@ func flowColumnSpan(item *boxes.Box, y float64, pages *[]Page, opts Options, wid
 	boxHeight := contentHeight + verticalInsets(item)
 	y += item.Style.MarginTop
 	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-	fragment := placeFragmentUnit(fragmentUnit{height: boxHeight, breakBefore: pageBreakValue(item.Style.BreakBefore)}, y, opts.top(), bottom, pageHasContent, pages)
+	fragment := placeFragmentUnitForPage(fragmentUnit{height: boxHeight, breakBefore: pageBreakValue(item.Style.BreakBefore)}, y, opts.top(), bottom, pageHasContent, pages, opts)
 	y = fragment.y
 	x := opts.left()
 	placedSpan := placed(item, item.Text, nil, x, y, width, boxHeight, fs, font)

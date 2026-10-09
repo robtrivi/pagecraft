@@ -43,29 +43,30 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 		fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", kidsRefs(len(pages)), len(pages)),
 	}
 	for i, pg := range pages {
+		pageOpts := optionsForPageGeometry(opts, pg.Geometry)
 		pageObj := 3 + 2*i
 		rotation := ""
-		if opts.PageRotation != 0 {
-			rotation = fmt.Sprintf(" /Rotate %d", opts.PageRotation)
+		if pageOpts.PageRotation != 0 {
+			rotation = fmt.Sprintf(" /Rotate %d", pageOpts.PageRotation)
 		}
-		pageBoxes := fmt.Sprintf("/MediaBox [0 0 %g %g]", opts.PageWidth, opts.PageHeight)
-		if opts.PageBleed > 0 || opts.PageMarks != 0 {
-			offset := opts.PageBleed
-			if opts.PageMarks != 0 {
+		pageBoxes := fmt.Sprintf("/MediaBox [0 0 %g %g]", pageOpts.PageWidth, pageOpts.PageHeight)
+		if pageOpts.PageBleed > 0 || pageOpts.PageMarks != 0 {
+			offset := pageOpts.PageBleed
+			if pageOpts.PageMarks != 0 {
 				offset += 18
 			}
 			pageBoxes = fmt.Sprintf("/MediaBox [%g %g %g %g] /CropBox [%g %g %g %g] /BleedBox [%g %g %g %g] /TrimBox [0 0 %g %g]",
-				-offset, -offset, opts.PageWidth+offset, opts.PageHeight+offset,
-				-offset, -offset, opts.PageWidth+offset, opts.PageHeight+offset,
-				-opts.PageBleed, -opts.PageBleed, opts.PageWidth+opts.PageBleed, opts.PageHeight+opts.PageBleed,
-				opts.PageWidth, opts.PageHeight)
+				-offset, -offset, pageOpts.PageWidth+offset, pageOpts.PageHeight+offset,
+				-offset, -offset, pageOpts.PageWidth+offset, pageOpts.PageHeight+offset,
+				-pageOpts.PageBleed, -pageOpts.PageBleed, pageOpts.PageWidth+pageOpts.PageBleed, pageOpts.PageHeight+pageOpts.PageBleed,
+				pageOpts.PageWidth, pageOpts.PageHeight)
 		}
 		bodies = append(bodies, fmt.Sprintf(
 			"<< /Type /Page /Parent 2 0 R %s%s /Resources << /Font <<%s%s >>%s%s >>%s /Contents %d 0 R >>",
 			pageBoxes, rotation, base14Refs(fontID), fontRefs(faces, fontObjBase),
 			xobjectRefs(imgs, svgs, imgBase, forms, formBase, i), extRefs(alphas, gsBase),
 			annotsRefs(annotPages[i], annotBase), pageObj+1))
-		bodies = append(bodies, contentStream(pg, opts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], gsIndex, formIndex[i][0]))
+		bodies = append(bodies, contentStream(pg, pageOpts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], gsIndex, formIndex[i][0]))
 	}
 	bodies = append(bodies, base14Bodies(base14)...)
 	for _, r := range imgs {
@@ -101,7 +102,8 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 			xobjectRefs(imgs, svgs, imgBase, forms, formBase, form.page), extRefs(alphas, gsBase))
 		blocks := pages[form.page].Blocks[form.start : form.end+1]
 		fragmentNodes := fragmentNodesByPaintIndex(pages[form.page].FragmentTree)
-		bodies = append(bodies, opacityForm(blocks, form, formIndex[form.page], fragmentNodes, opts, imgIndex, svgIndex, fontIndex, fontSubsets, gsIndex, resources))
+		pageOpts := optionsForPageGeometry(opts, pages[form.page].Geometry)
+		bodies = append(bodies, opacityForm(blocks, form, formIndex[form.page], fragmentNodes, pageOpts, imgIndex, svgIndex, fontIndex, fontSubsets, gsIndex, resources))
 	}
 
 	var sb strings.Builder
@@ -120,6 +122,20 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 	fmt.Fprintf(&sb, "trailer\n<< /Size %d /Root 1 0 R%s >>\nstartxref\n%d\n%%%%EOF",
 		len(bodies)+1, infoRef, xrefPos)
 	return []byte(sb.String())
+}
+
+func optionsForPageGeometry(opts layout.Options, geometry layout.PageGeometry) layout.Options {
+	if geometry.Width == 0 || geometry.Height == 0 {
+		return opts
+	}
+	opts.PageWidth, opts.PageHeight = geometry.Width, geometry.Height
+	opts.PageMargins = geometry.Margins
+	if geometry.Margins.HasBottom {
+		opts.Margin = geometry.Margins.Bottom
+	}
+	opts.PageBackground, opts.HasPageBackground = geometry.Background, geometry.HasBackground
+	opts.PageRotation, opts.PageBleed, opts.PageMarks = geometry.Rotation, geometry.Bleed, geometry.Marks
+	return opts
 }
 
 // infoDict builds the Info dictionary (Title/Author/Subject); ok is false when empty.

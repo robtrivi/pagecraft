@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"math"
 	"strings"
 
 	"github.com/robtrivi/pagecraft-go/boxes"
@@ -35,7 +36,16 @@ func flowInlineBlockFragments(block *boxes.Box, lines []inlineStream, x, width, 
 	}
 	pageBase := len(*pages) - 1
 	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-	fragments := planFragments(blockLineFragmentUnits(block, len(lines)), y, opts.top(), bottom, pageHasContent, height)
+	var fragments []fragmentRange
+	if len(opts.PageRules) != 0 {
+		bounds := func(offset int) (float64, float64) {
+			pageOpts := opts.forPage(pageBase + offset + 1)
+			return pageOpts.top(), pageOpts.pageBottom()
+		}
+		fragments = planFragmentsByPage(blockLineFragmentUnits(block, len(lines)), y, pageHasContent, bounds, height)
+	} else {
+		fragments = planFragments(blockLineFragmentUnits(block, len(lines)), y, opts.top(), bottom, pageHasContent, height)
+	}
 	for _, fragmentRange := range fragments {
 		ensurePageIndex(pages, pageBase+fragmentRange.pageOffset)
 		fragmentLines := lines[fragmentRange.first:fragmentRange.end]
@@ -56,6 +66,101 @@ func flowInlineBlockFragments(block *boxes.Box, lines []inlineStream, x, width, 
 	}
 	last := fragments[len(fragments)-1]
 	return last.y + last.height
+}
+
+// flowResponsiveInlineFragments rebreaks a paragraph against each destination page's width and height.
+func flowResponsiveInlineFragments(block *boxes.Box, stream inlineStream, y float64, pages *[]Page, opts Options) float64 {
+	inset := boxInsets(block)
+	pageIndex := len(*pages) - 1
+	firstFragment := true
+	for len(stream) > 0 {
+		pageOpts := opts.forPage(pageIndex + 1)
+		ensurePageIndex(pages, pageIndex)
+		pageTop, pageBottom := pageOpts.top(), pageOpts.pageBottom()
+		if pageIndex != len(*pages)-1 {
+			pageIndex = len(*pages) - 1
+		}
+		if pageIndex >= 0 && (*pages)[pageIndex].blockCount() == 0 && y < pageTop {
+			y = pageTop
+		}
+		available := math.Max(0, pageOpts.PageWidth-pageOpts.left()-pageOpts.right()-block.Style.MarginLeft-block.Style.MarginRight)
+		width := usedWidth(block, available)
+		contentWidth := math.Max(0, width-inset.left-inset.right)
+		lines := breakInlineStream(stream, contentWidth, wraps(block))
+		if len(lines) == 0 {
+			return y
+		}
+		lineHeights := make([]float64, len(lines))
+		for i := range lines {
+			lineHeights[i] = lineHeightW(lines[i], block, pageOpts)
+		}
+		fit, extent := 0, 0.0
+		for fit < len(lines) {
+			extra := lineHeights[fit]
+			if firstFragment && fit == 0 {
+				extra += inset.top
+			}
+			if fit+1 == len(lines) {
+				extra += inset.bottom
+			}
+			if y+extent+extra > pageBottom+fragmentEpsilon {
+				break
+			}
+			extent += extra
+			fit++
+		}
+		if fit == 0 {
+			if (*pages)[pageIndex].blockCount() > 0 || y > pageTop+fragmentEpsilon {
+				pageIndex++
+				ensurePageIndex(pages, pageIndex)
+				y = pageOpts.forPage(pageIndex + 1).top()
+				continue
+			}
+			fit, extent = 1, lineHeights[0]
+			if firstFragment {
+				extent += inset.top
+			}
+			if len(lines) == 1 {
+				extent += inset.bottom
+			}
+		}
+		if fit < len(lines) && fit == 1 && len(lines) > 1 && (*pages)[pageIndex].blockCount() > 0 {
+			pageIndex++
+			ensurePageIndex(pages, pageIndex)
+			y = opts.forPage(pageIndex + 1).top()
+			continue
+		}
+		if fit < len(lines) && len(lines)-fit == 1 && fit > 2 {
+			fit--
+			extent -= lineHeights[fit]
+		}
+		last := fit == len(lines)
+		fragmentLines := lines[:fit]
+		boxX := pageOpts.left() + block.Style.MarginLeft
+		box := fragmentBox(block, firstFragment, last)
+		contentY := y
+		if firstFragment {
+			contentY += inset.top
+		}
+		runs := assignRunsWithFinalLine(block, fragmentLines, boxX+inset.left, contentWidth, contentY, pageOpts, last)
+		fragment := placed(box, inlineFragmentText(fragmentLines), nil, boxX, y, width, extent, resolveSize(block, pageOpts), fontFor(pageOpts, block))
+		fragment = fragmentPlacedBox(fragment, firstFragment, last)
+		fragment.Runs = runs
+		(*pages)[pageIndex].emitBlock(fragment)
+		if last {
+			return y + extent
+		}
+		var rest inlineStream
+		for _, line := range lines[fit:] {
+			rest = append(rest, line...)
+		}
+		stream = rest
+		firstFragment = false
+		pageIndex++
+		ensurePageIndex(pages, pageIndex)
+		y = opts.forPage(pageIndex + 1).top()
+	}
+	return y
 }
 
 func blockLineFragmentUnits(block *boxes.Box, lineCount int) []fragmentUnit {

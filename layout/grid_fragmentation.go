@@ -95,7 +95,7 @@ func flowGridSubtreesAcrossPages(g *boxes.Box, row []gridItem, metrics gridRowLa
 				case it.Image != nil:
 					itemHeight := metrics.contentHeights[itemIndex]
 					pageHasContent := (*itemPages)[0].blockCount() > 0
-					fragment := placeFragmentUnit(fragmentUnit{height: itemHeight}, y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, itemPages)
+					fragment := placeFragmentUnitForPage(fragmentUnit{height: itemHeight}, y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, itemPages, opts)
 					ensurePageIndex(itemPages, fragment.pageOffset)
 					imageWidth, imageHeight := gridRasterDimensions(it, itemWidth, g, rowIndex, 1, rowGap)
 					(*itemPages)[fragment.pageOffset].emitBlock(placed(it, it.Text, it.Image, itemX, fragment.y, imageWidth, imageHeight, metrics.sizes[itemIndex], metrics.faces[itemIndex]))
@@ -273,13 +273,19 @@ func flowGridRowAcrossPages(g *boxes.Box, row []gridItem, metrics gridRowLayout,
 	pageBase := len(*pages) - 1
 	pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 	contentOriginX := opts.left() + g.Style.MarginLeft + boxInsets(g).left
-	fragments := planFragments(make([]fragmentUnit, lineCount), y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, func(firstLine, endLine int) float64 {
+	measure := func(firstLine, endLine int) float64 {
 		height := 0.0
 		for _, lineHeight := range lineHeights[firstLine:endLine] {
 			height += lineHeight
 		}
 		return height
-	})
+	}
+	var fragments []fragmentRange
+	if len(opts.PageRules) != 0 {
+		fragments = planFragmentsByPage(make([]fragmentUnit, lineCount), y, pageHasContent, pageBoundsForOptions(opts, pageBase, g.Style.MarginTop), measure)
+	} else {
+		fragments = planFragments(make([]fragmentUnit, lineCount), y, opts.top()+g.Style.MarginTop, bottom, pageHasContent, measure)
+	}
 	for _, fragment := range fragments {
 		ensurePageIndex(pages, pageBase+fragment.pageOffset)
 		firstLine, lastLine := fragment.first, fragment.end

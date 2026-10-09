@@ -66,6 +66,14 @@ func TestCSS_ResolvePageRuleCascadesMarginBoxDeclarations(t *testing.T) {
 	}
 }
 
+func TestCSS_ResolvePageDefaultsIgnoresPageSpecificSelectors(t *testing.T) {
+	rules := ParsePageRules(`@page { size: A4; margin: 10pt } @page :first { size: Letter; margin-top: 40pt } @page :left { margin-left: 30pt }`)
+	style := ResolvePageDefaults(rules)
+	if style.Width != 595 || style.Height != 842 || style.Margins.Top != 10 || style.Margins.Left != 10 {
+		t.Errorf("default page style included a pseudo-page override: %+v", style)
+	}
+}
+
 // Page step 1: @page size (keyword and landscape) and simple margins.
 // Units: pt, px (1:1 in v1), cm, mm, and in.
 func TestCSS_ParsePageRule_ResolvesPageSizeAndMargin(t *testing.T) {

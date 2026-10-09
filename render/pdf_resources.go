@@ -25,6 +25,9 @@ func collectAlphas(pages []layout.Page, opts layout.Options) ([]float64, map[flo
 		add(opts.PageBackground[3])
 	}
 	for _, pg := range pages {
+		if pg.Geometry.HasBackground {
+			add(pg.Geometry.Background[3])
+		}
 		for _, b := range pg.Blocks {
 			for _, group := range b.OpacityGroups {
 				add(group.Opacity)

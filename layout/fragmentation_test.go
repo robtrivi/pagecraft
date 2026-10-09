@@ -73,6 +73,26 @@ func TestLayout_PlanFragmentsFitsMeasuredUnitsIntoAvailablePages(t *testing.T) {
 	assertFragmentRanges(t, fragments, want)
 }
 
+func TestLayout_PlanFragmentsUsesDestinationPageGeometry(t *testing.T) {
+	units := []fragmentUnit{{height: 10}, {height: 10}, {height: 10}}
+	geometry := func(offset int) (float64, float64) {
+		if offset == 0 {
+			return 10, 25
+		}
+		return 20, 45
+	}
+	got := planFragmentsByPage(units, 10, false, geometry, nil)
+	want := []fragmentRange{{first: 0, end: 1, pageOffset: 0, y: 10, height: 10}, {first: 1, end: 3, pageOffset: 1, y: 20, height: 20}}
+	if len(got) != len(want) {
+		t.Fatalf("fragments=%+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("fragment %d=%+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
 func TestLayout_FragmentContinuationResumesTheSamePagePlan(t *testing.T) {
 	units := []fragmentUnit{{height: 4}, {height: 7}, {height: 3}}
 	want := planFragments(units, 2, 1, 10, true, nil)
