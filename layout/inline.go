@@ -167,11 +167,31 @@ func buildInlineStream(b *boxes.Box, opts Options) inlineStream {
 	return resolveInlineStream(collectInlineDrafts(b, opts))
 }
 
+func isSimpleLTRText(text string) bool {
+	for _, r := range text {
+		if !unicode.IsGraphic(r) {
+			return false
+		}
+		if r < utf8.RuneSelf {
+			continue
+		}
+		script := language.LookupScript(r)
+		if script != language.Latin && script != language.Common && script != language.Inherited {
+			return false
+		}
+	}
+	return true
+}
+
 func itemizeInlineDraftsByBidi(drafts []inlineDraft) []inlineDraft {
 	type textRange struct{ start, end int }
 	var result []inlineDraft
 	for _, draft := range drafts {
 		if draft.text == "" || draft.image != nil || draft.kind == inlineHardBreak {
+			result = append(result, draft)
+			continue
+		}
+		if isSimpleLTRText(draft.text) {
 			result = append(result, draft)
 			continue
 		}
@@ -231,6 +251,21 @@ func itemizeInlineDraftsByBidi(drafts []inlineDraft) []inlineDraft {
 
 func assignInlineParagraphBidiLevels(drafts []inlineDraft) []inlineDraft {
 	if len(drafts) == 0 {
+		return drafts
+	}
+	simpleLTR := true
+	for _, draft := range drafts {
+		if draft.text != "" && !isSimpleLTRText(draft.text) {
+			simpleLTR = false
+			break
+		}
+	}
+	if simpleLTR {
+		for index := range drafts {
+			drafts[index].bidiLevel = 0
+			drafts[index].bidiBaseRTL = false
+			drafts[index].hasBidiLevel = true
+		}
 		return drafts
 	}
 	var text strings.Builder
@@ -749,6 +784,28 @@ func singleRuns(src *boxes.Box, lines []string, x, yTop, lineH, fs float64, font
 }
 
 func inlineLineBidiPositions(line inlineStream, origin, justifyGap float64) (map[int]float64, bool) {
+	simpleLTR := true
+	for _, item := range line {
+		if item.kind != inlineHardBreak && !isSimpleLTRText(item.text) {
+			simpleLTR = false
+			break
+		}
+	}
+	if simpleLTR {
+		positions := make(map[int]float64, len(line))
+		x := origin
+		for index, item := range line {
+			if item.kind == inlineHardBreak {
+				continue
+			}
+			positions[index] = x
+			x += item.w
+			if index+1 < len(line) && line[index+1].kind != inlineHardBreak {
+				x += line[index+1].before.advance + justifyGap
+			}
+		}
+		return positions, false
+	}
 	type lineItem struct {
 		index, start int
 		level        bidi.Level

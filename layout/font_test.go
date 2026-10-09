@@ -23,6 +23,27 @@ func TestLayout_FontForSelectsWeightVariant(t *testing.T) {
 	}
 }
 
+func TestLayout_IsSimpleLTRText_SkipsOnlySafeScripts(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{name: "ASCII prose", text: "Northstar Studio 2026", want: true},
+		{name: "Latin accents and punctuation", text: "Bogotá — Perú", want: true},
+		{name: "mixed Latin and Greek", text: "Northstar Ελληνικά", want: false},
+		{name: "Arabic", text: "مرحبا", want: false},
+		{name: "bidi control", text: "abc\u202e", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSimpleLTRText(tt.text); got != tt.want {
+				t.Errorf("isSimpleLTRText(%q) = %v, want %v", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
 // Per-family measurement step 1: the block carries its Face, and Flow wraps
 // lines using that face rather than the global measurer.
 // Skips when not system TTF is available (as in fonts/).

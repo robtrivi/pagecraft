@@ -24,6 +24,31 @@ func TestRender_ContentStreams_Compressed(t *testing.T) {
 	}
 }
 
+func TestRender_FlateWriterReuse_PreservesCompressedBytes(t *testing.T) {
+	w := takeFlateWriter()
+	putFlateWriter(w)
+	reused := takeFlateWriter()
+	if reused != w {
+		t.Fatal("compressed stream writer was not reused")
+	}
+	putFlateWriter(reused)
+
+	for _, raw := range [][]byte{[]byte("first paragraph"), bytes.Repeat([]byte("Latin text "), 200)} {
+		got := flateBytes(raw)
+		var want bytes.Buffer
+		standard := zlib.NewWriter(&want)
+		if _, err := standard.Write(raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := standard.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want.Bytes()) {
+			t.Fatal("reused writer changed the compressed stream bytes")
+		}
+	}
+}
+
 // streamText concatenates the decompressed content streams from the PDF.
 func streamText(t *testing.T, pdf []byte) string {
 	t.Helper()

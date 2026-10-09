@@ -5,8 +5,10 @@ import (
 	"compress/zlib"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/robtrivi/pagecraft-go/css"
 	"github.com/robtrivi/pagecraft-go/fonts"
@@ -185,10 +187,27 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 // flateBytes compresses data for PDF streams.
 func flateBytes(raw []byte) []byte {
 	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
+	w := takeFlateWriter()
+	w.Reset(&buf)
 	w.Write(raw)
 	w.Close()
-	return buf.Bytes()
+	result := append([]byte(nil), buf.Bytes()...)
+	putFlateWriter(w)
+	return result
+}
+
+var flateWriters sync.Pool
+
+func takeFlateWriter() *zlib.Writer {
+	if w, ok := flateWriters.Get().(*zlib.Writer); ok {
+		return w
+	}
+	return zlib.NewWriter(io.Discard)
+}
+
+func putFlateWriter(w *zlib.Writer) {
+	w.Reset(io.Discard)
+	flateWriters.Put(w)
 }
 
 // footerSize is the fixed footer size (v1).
