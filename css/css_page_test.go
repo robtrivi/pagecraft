@@ -4,6 +4,68 @@ import (
 	"testing"
 )
 
+func TestCSS_ParsePageRulesPreservesSelectorsAndDeclarationOrder(t *testing.T) {
+	rules := ParsePageRules(`@page { size: A4; margin: 12pt } @page report:left { size: A3 landscape; margin-left: 24pt } @page :first { margin-top: 30pt }`)
+	if len(rules) != 3 {
+		t.Fatalf("got %d page rules, want 3", len(rules))
+	}
+	if rules[0].Selector.Name != "" || rules[0].Selector.Pseudo != "" {
+		t.Errorf("default selector: got %+v", rules[0].Selector)
+	}
+	if rules[1].Selector.Name != "report" || rules[1].Selector.Pseudo != "left" {
+		t.Errorf("named left selector: got %+v", rules[1].Selector)
+	}
+	if rules[1].Style.Width != 1190 || rules[1].Style.Height != 842 || rules[1].Style.Margins.Left != 24 {
+		t.Errorf("named rule style: got %+v", rules[1].Style)
+	}
+	if rules[2].Selector.Pseudo != "first" || rules[2].Style.Margins.Top != 30 {
+		t.Errorf("first-page rule: got %+v", rules[2])
+	}
+}
+
+func TestCSS_ResolvePageStyleCascadesMatchingPageSelectors(t *testing.T) {
+	rules := ParsePageRules(`@page { size: A4; margin: 10pt; margin-top: 8pt } @page report:left { margin-left: 24pt } @page :first { margin-top: 30pt } @page { margin-top: 2pt }`)
+	style := ResolvePageStyle(rules, "report", 1)
+	if style.Width != 595 || style.Height != 842 || style.Margins.Left != 10 || style.Margins.Top != 30 {
+		t.Errorf("resolved style: %+v", style)
+	}
+	style = ResolvePageStyle(rules, "report", 2)
+	if style.Margins.Left != 24 || style.Margins.Top != 2 {
+		t.Errorf("left page selector should override matching side: %+v", style.Margins)
+	}
+}
+
+func TestCSS_ParsePageStyleReadsBleedAndMarks(t *testing.T) {
+	rules := ParsePageRules(`@page { bleed: 3mm; marks: crop cross }`)
+	if len(rules) != 1 || !pageValueNear(rules[0].Style.Bleed, 3*72/25.4) || rules[0].Style.Marks != PageMarkCrop|PageMarkCross {
+		t.Fatalf("got %+v, want 3mm bleed and crop+cross marks", rules)
+	}
+}
+
+func TestCSS_ParsePageRulesRetainsAllMarginBoxDeclarations(t *testing.T) {
+	rules := ParsePageRules(`@page { @top-left-corner { content: "TL"; color: red } @top-left { content: "L" } @top-center { content: "C" } @top-right { content: "R" } @top-right-corner { content: "TR" } @right-top { content: "RT" } @right-middle { content: "RM" } @right-bottom { content: "RB" } @bottom-right-corner { content: "BR" } @bottom-right { content: "B" } @bottom-center { content: "BC" } @bottom-left { content: "BL" } @bottom-left-corner { content: "BLc" } @left-bottom { content: "LB" } @left-middle { content: "LM" } @left-top { content: "LT" } }`)
+	if len(rules) != 1 || len(rules[0].MarginBoxes) != 16 {
+		t.Fatalf("got page rule margin boxes: %+v", rules)
+	}
+	if got := rules[0].MarginBoxes["top-left-corner"]["content"]; got != `"TL"` {
+		t.Errorf("top-left-corner content = %q, want quoted literal", got)
+	}
+	if got := rules[0].MarginBoxes["top-left-corner"]["color"]; got != "red" {
+		t.Errorf("top-left-corner color = %q, want red", got)
+	}
+}
+
+func TestCSS_ResolvePageRuleCascadesMarginBoxDeclarations(t *testing.T) {
+	rules := ParsePageRules(`@page { @bottom-center { content: counter(page); color: red } } @page :first { @bottom-center { color: blue } }`)
+	page := ResolvePageRule(rules, "", 1)
+	if got := page.MarginBoxes["bottom-center"]["content"]; got != "counter(page)" {
+		t.Errorf("content = %q, want counter(page)", got)
+	}
+	if got := page.MarginBoxes["bottom-center"]["color"]; got != "blue" {
+		t.Errorf("color = %q, want blue from more specific rule", got)
+	}
+}
+
 // Page step 1: @page size (keyword and landscape) and simple margins.
 // Units: pt, px (1:1 in v1), cm, mm, and in.
 func TestCSS_ParsePageRule_ResolvesPageSizeAndMargin(t *testing.T) {

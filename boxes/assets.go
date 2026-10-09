@@ -94,19 +94,20 @@ func readMetadata(doc *html.Node) Metadata {
 // loadPage reads the first valid @page rule and its footer from style elements.
 func (b *Box) loadPage(texts []string) {
 	for _, t := range texts {
-		if page, ok := css.ParsePageStyle(t); ok {
-			if page.HasSize {
-				b.Page.Width, b.Page.Height = page.Width, page.Height
-			}
-			b.Page.Margins = page.Margins
-			b.Page.Background, b.Page.HasBackground = page.Background, page.HasBackground
-			b.Page.Rotation = page.Rotation
-			if page.Margins.HasTop && page.Margins.HasRight && page.Margins.HasBottom && page.Margins.HasLeft &&
-				!page.Margins.TopPercent && !page.Margins.RightPercent && !page.Margins.BottomPercent && !page.Margins.LeftPercent &&
-				page.Margins.Top == page.Margins.Right && page.Margins.Top == page.Margins.Bottom && page.Margins.Top == page.Margins.Left {
-				b.Page.Margin, b.Page.HasMargin = page.Margins.Top, true
-			}
-			break
+		b.PageRules = append(b.PageRules, css.ParsePageRules(t)...)
+	}
+	if len(b.PageRules) > 0 {
+		page := css.ResolvePageStyle(b.PageRules, "", 1)
+		b.Page.Width, b.Page.Height = page.Width, page.Height
+		b.Page.Margins = page.Margins
+		b.Page.Background, b.Page.HasBackground = page.Background, page.HasBackground
+		b.Page.Rotation = page.Rotation
+		b.Page.Bleed, b.Page.HasBleed = page.Bleed, page.HasBleed
+		b.Page.Marks, b.Page.HasMarks = page.Marks, page.HasMarks
+		if page.Margins.HasTop && page.Margins.HasRight && page.Margins.HasBottom && page.Margins.HasLeft &&
+			!page.Margins.TopPercent && !page.Margins.RightPercent && !page.Margins.BottomPercent && !page.Margins.LeftPercent &&
+			page.Margins.Top == page.Margins.Right && page.Margins.Top == page.Margins.Bottom && page.Margins.Top == page.Margins.Left {
+			b.Page.Margin, b.Page.HasMargin = page.Margins.Top, true
 		}
 	}
 	for _, t := range texts {
@@ -141,6 +142,10 @@ type PageConfig struct {
 	Background    [4]float64
 	HasBackground bool
 	Rotation      int
+	Bleed         float64
+	HasBleed      bool
+	Marks         css.PageMarks
+	HasMarks      bool
 }
 
 func (b *Box) loadFonts(texts []string, ld *loader) error {

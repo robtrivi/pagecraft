@@ -27,6 +27,7 @@ type Box struct {
 	Fonts        map[string]*fonts.Face    // document font registry (root only)
 	FontVariants map[string]fonts.Variants // faces by weight and style
 	Page         PageConfig                // @page from the first valid rule (root only)
+	PageRules    []css.PageRule            // Ordered @page rules for page-context resolution.
 	PageFooter   []css.ContentChunk        // @bottom-center (root only)
 	Meta         Metadata                  // <title>/meta (root only)
 	Children     []*Box

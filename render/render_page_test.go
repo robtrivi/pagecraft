@@ -115,3 +115,23 @@ func TestRender_PageRuleAppliesOutputRotation(t *testing.T) {
 		t.Error("PDF page dictionary does not contain the counter-clockwise page rotation")
 	}
 }
+
+func TestRender_PageRuleAddsBleedBoxesAndCropMarks(t *testing.T) {
+	pdf, err := RenderHTMLToPDF(`<style>@page { size: 400pt 500pt; margin: 20pt; bleed: 3mm; marks: crop }</style><p>Page</p>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	for _, want := range []string{
+		"/MediaBox [-26.503937007874015 -26.503937007874015 426.503937007874 526.503937007874]",
+		"/CropBox [-26.503937007874015 -26.503937007874015 426.503937007874 526.503937007874]",
+		"/BleedBox [-8.503937007874015 -8.503937007874015 408.503937007874 508.503937007874]",
+		"/TrimBox [0 0 400 500]",
+	} {
+		if !bytes.Contains(pdf, []byte(want)) {
+			t.Errorf("missing PDF page box %q", want)
+		}
+	}
+	if !strings.Contains(streamText(t, pdf), " S\n") {
+		t.Error("crop marks were not painted")
+	}
+}

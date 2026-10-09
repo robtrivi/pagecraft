@@ -1,6 +1,7 @@
 package css
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,243 @@ type PageStyle struct {
 	Background    [4]float64
 	HasBackground bool
 	Rotation      int // PDF page rotation in clockwise degrees.
+	HasRotation   bool
+	Bleed         float64
+	HasBleed      bool
+	Marks         PageMarks
+	HasMarks      bool
+}
+
+// PageMarks selects printer registration marks from the CSS marks descriptor.
+type PageMarks uint8
+
+const (
+	PageMarkCrop PageMarks = 1 << iota
+	PageMarkCross
+)
+
+// PageSelector identifies the named page and optional page pseudo-class.
+type PageSelector struct {
+	Name   string
+	Pseudo string
+}
+
+// PageRule keeps each @page selector and its computed declarations in source order.
+type PageRule struct {
+	Selector     PageSelector
+	Style        PageStyle
+	Declarations Declarations
+	MarginBoxes  map[string]Declarations
+}
+
+// ParsePageRules reads all @page rules, retaining selectors and source order.
+func ParsePageRules(src string) []PageRule {
+	l := css.NewLexer(parse.NewInputString(src))
+	var rules []PageRule
+	for {
+		tt, data := l.Next()
+		if tt == css.ErrorToken {
+			break
+		}
+		if tt != css.AtKeywordToken || !strings.EqualFold(strings.TrimPrefix(string(data), "@"), "page") {
+			continue
+		}
+		var prelude strings.Builder
+		var body string
+		for {
+			tok, part := l.Next()
+			if tok == css.ErrorToken || tok == css.SemicolonToken {
+				body = ""
+				break
+			}
+			if tok == css.LeftBraceToken {
+				body, _ = ruleBody(l)
+				break
+			}
+			prelude.Write(part)
+		}
+		if body == "" {
+			continue
+		}
+		selector, ok := parsePageSelector(prelude.String())
+		if !ok {
+			continue
+		}
+		style, _ := ParsePageStyle("@page {" + body + "}")
+		marginBoxes := parsePageMarginBoxes(body)
+		declarations, _, _ := ParseInlineStyleWithWarnings(body)
+		for name := range marginBoxes {
+			delete(declarations, "@"+name)
+		}
+		rules = append(rules, PageRule{Selector: selector, Style: style, Declarations: declarations, MarginBoxes: marginBoxes})
+	}
+	return rules
+}
+
+var pageMarginBoxNames = map[string]bool{
+	"top-left-corner": true, "top-left": true, "top-center": true, "top-right": true, "top-right-corner": true,
+	"right-top": true, "right-middle": true, "right-bottom": true,
+	"bottom-left-corner": true, "bottom-left": true, "bottom-center": true, "bottom-right": true, "bottom-right-corner": true,
+	"left-top": true, "left-middle": true, "left-bottom": true,
+}
+
+func parsePageMarginBoxes(body string) map[string]Declarations {
+	boxes := make(map[string]Declarations)
+	l := css.NewLexer(parse.NewInputString(body))
+	for {
+		tt, data := l.Next()
+		if tt == css.ErrorToken {
+			break
+		}
+		if tt != css.AtKeywordToken {
+			continue
+		}
+		name := strings.ToLower(strings.TrimPrefix(string(data), "@"))
+		if !pageMarginBoxNames[name] {
+			continue
+		}
+		boxBody, ok := atBody(l)
+		if !ok {
+			continue
+		}
+		decls, _, _ := ParseInlineStyleWithWarnings(boxBody)
+		boxes[name] = decls
+	}
+	return boxes
+}
+
+// ResolvePageStyle applies matching @page rules in source order. Page numbers are one-based.
+func ResolvePageStyle(rules []PageRule, name string, pageNumber int) PageStyle {
+	return ResolvePageRule(rules, name, pageNumber).Style
+}
+
+// ResolvePageRule cascades descriptors and margin-box declarations for one page context.
+func ResolvePageRule(rules []PageRule, name string, pageNumber int) PageRule {
+	result := PageRule{Selector: PageSelector{Name: name}, Declarations: Declarations{}, MarginBoxes: map[string]Declarations{}}
+	var matching []PageRule
+	for _, rule := range rules {
+		if pageSelectorMatches(rule.Selector, name, pageNumber) {
+			matching = append(matching, rule)
+		}
+	}
+	sort.SliceStable(matching, func(i, j int) bool {
+		return pageSelectorSpecificity(matching[i].Selector) < pageSelectorSpecificity(matching[j].Selector)
+	})
+	for _, rule := range matching {
+		mergePageStyle(&result.Style, rule.Style)
+		for property, value := range rule.Declarations {
+			result.Declarations[property] = value
+		}
+		for name, declarations := range rule.MarginBoxes {
+			if result.MarginBoxes[name] == nil {
+				result.MarginBoxes[name] = Declarations{}
+			}
+			for property, value := range declarations {
+				result.MarginBoxes[name][property] = value
+			}
+		}
+	}
+	return result
+}
+
+func pageSelectorSpecificity(selector PageSelector) int {
+	specificity := 0
+	if selector.Name != "" {
+		specificity++
+	}
+	if selector.Pseudo != "" {
+		specificity++
+	}
+	return specificity
+}
+
+func pageSelectorMatches(selector PageSelector, name string, pageNumber int) bool {
+	if selector.Name != "" && selector.Name != name {
+		return false
+	}
+	switch selector.Pseudo {
+	case "":
+		return true
+	case "first":
+		return pageNumber == 1
+	case "left":
+		return pageNumber > 1 && pageNumber%2 == 0
+	case "right":
+		return pageNumber%2 == 1
+	case "blank":
+		return false // Blank pages are generated only after pagination knows their role.
+	default:
+		return false
+	}
+}
+
+func mergePageStyle(dst *PageStyle, src PageStyle) {
+	if src.HasSize {
+		dst.Width, dst.Height, dst.HasSize = src.Width, src.Height, true
+	}
+	if src.Margins.HasTop {
+		dst.Margins.Top, dst.Margins.TopPercent, dst.Margins.HasTop = src.Margins.Top, src.Margins.TopPercent, true
+	}
+	if src.Margins.HasRight {
+		dst.Margins.Right, dst.Margins.RightPercent, dst.Margins.HasRight = src.Margins.Right, src.Margins.RightPercent, true
+	}
+	if src.Margins.HasBottom {
+		dst.Margins.Bottom, dst.Margins.BottomPercent, dst.Margins.HasBottom = src.Margins.Bottom, src.Margins.BottomPercent, true
+	}
+	if src.Margins.HasLeft {
+		dst.Margins.Left, dst.Margins.LeftPercent, dst.Margins.HasLeft = src.Margins.Left, src.Margins.LeftPercent, true
+	}
+	if src.HasBackground {
+		dst.Background, dst.HasBackground = src.Background, true
+	}
+	if src.HasRotation {
+		dst.Rotation, dst.HasRotation = src.Rotation, true
+	}
+	if src.HasBleed {
+		dst.Bleed, dst.HasBleed = src.Bleed, true
+	}
+	if src.HasMarks {
+		dst.Marks, dst.HasMarks = src.Marks, true
+	}
+}
+
+func parsePageSelector(prelude string) (PageSelector, bool) {
+	fields := strings.Fields(strings.TrimSpace(prelude))
+	if len(fields) == 0 {
+		return PageSelector{}, true
+	}
+	if len(fields) != 1 {
+		return PageSelector{}, false
+	}
+	parts := strings.Split(fields[0], ":")
+	selector := PageSelector{Name: parts[0]}
+	if selector.Name != "" && !isCSSIdent(selector.Name) {
+		return PageSelector{}, false
+	}
+	if len(parts) > 2 {
+		return PageSelector{}, false
+	}
+	if len(parts) == 2 {
+		switch strings.ToLower(parts[1]) {
+		case "first", "left", "right", "blank":
+			selector.Pseudo = strings.ToLower(parts[1])
+		default:
+			return PageSelector{}, false
+		}
+	}
+	return selector, true
+}
+
+func isCSSIdent(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // ParsePageStyle reads page-box size and margins from the first @page rule.
@@ -94,11 +332,32 @@ func ParsePageStyle(src string) (PageStyle, bool) {
 			case "page-orientation":
 				switch strings.ToLower(strings.TrimSpace(value)) {
 				case "upright":
-					page.Rotation = 0
+					page.Rotation, page.HasRotation = 0, true
 				case "rotate-right":
-					page.Rotation = 90
+					page.Rotation, page.HasRotation = 90, true
 				case "rotate-left":
-					page.Rotation = 270
+					page.Rotation, page.HasRotation = 270, true
+				}
+			case "bleed":
+				if bleed, valid := parsePageMarginLength(value); valid && !bleed.percent && bleed.value >= 0 {
+					page.Bleed, page.HasBleed = bleed.value, true
+				}
+			case "marks":
+				marks := PageMarks(0)
+				valid := true
+				for _, mark := range strings.Fields(strings.ToLower(value)) {
+					switch mark {
+					case "none":
+					case "crop":
+						marks |= PageMarkCrop
+					case "cross":
+						marks |= PageMarkCross
+					default:
+						valid = false
+					}
+				}
+				if valid && strings.TrimSpace(value) != "" {
+					page.Marks, page.HasMarks = marks, true
 				}
 			case "margin":
 				if values, valid := parsePageMarginShorthand(value); valid {

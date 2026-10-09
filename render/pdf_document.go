@@ -48,9 +48,21 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 		if opts.PageRotation != 0 {
 			rotation = fmt.Sprintf(" /Rotate %d", opts.PageRotation)
 		}
+		pageBoxes := fmt.Sprintf("/MediaBox [0 0 %g %g]", opts.PageWidth, opts.PageHeight)
+		if opts.PageBleed > 0 || opts.PageMarks != 0 {
+			offset := opts.PageBleed
+			if opts.PageMarks != 0 {
+				offset += 18
+			}
+			pageBoxes = fmt.Sprintf("/MediaBox [%g %g %g %g] /CropBox [%g %g %g %g] /BleedBox [%g %g %g %g] /TrimBox [0 0 %g %g]",
+				-offset, -offset, opts.PageWidth+offset, opts.PageHeight+offset,
+				-offset, -offset, opts.PageWidth+offset, opts.PageHeight+offset,
+				-opts.PageBleed, -opts.PageBleed, opts.PageWidth+opts.PageBleed, opts.PageHeight+opts.PageBleed,
+				opts.PageWidth, opts.PageHeight)
+		}
 		bodies = append(bodies, fmt.Sprintf(
-			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %g %g]%s /Resources << /Font <<%s%s >>%s%s >>%s /Contents %d 0 R >>",
-			opts.PageWidth, opts.PageHeight, rotation, base14Refs(fontID), fontRefs(faces, fontObjBase),
+			"<< /Type /Page /Parent 2 0 R %s%s /Resources << /Font <<%s%s >>%s%s >>%s /Contents %d 0 R >>",
+			pageBoxes, rotation, base14Refs(fontID), fontRefs(faces, fontObjBase),
 			xobjectRefs(imgs, svgs, imgBase, forms, formBase, i), extRefs(alphas, gsBase),
 			annotsRefs(annotPages[i], annotBase), pageObj+1))
 		bodies = append(bodies, contentStream(pg, opts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], gsIndex, formIndex[i][0]))

@@ -29,6 +29,7 @@ func RenderHTMLToPDF(htmlStr string) ([]byte, error) {
 	}
 	opts.PageMargins = root.Page.Margins.Resolve(opts.PageWidth, opts.PageHeight)
 	opts.PageRotation = root.Page.Rotation
+	opts.PageBleed, opts.PageMarks = root.Page.Bleed, root.Page.Marks
 	if root.Page.HasMargin {
 		opts.Margin = root.Page.Margin
 	}

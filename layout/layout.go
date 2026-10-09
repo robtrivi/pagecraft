@@ -18,6 +18,8 @@ type Options struct {
 	PageBackground        [4]float64
 	HasPageBackground     bool
 	PageRotation          int
+	PageBleed             float64
+	PageMarks             css.PageMarks
 	Margin                float64 // equal on all four sides (v0.3)
 	PageMargins           css.PageMargins
 	space                 layoutSpace

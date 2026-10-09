@@ -26,7 +26,12 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 		if opts.PageBackground[3] < 1 {
 			fmt.Fprintf(&sb, "q\n/GS%d gs\n", gs[opts.PageBackground[3]])
 		}
-		fmt.Fprintf(&sb, "%g %g %g rg\n0 0 %g %g re f\n", opts.PageBackground[0], opts.PageBackground[1], opts.PageBackground[2], opts.PageWidth, opts.PageHeight)
+		bleed := opts.PageBleed
+		if bleed > 0 {
+			fmt.Fprintf(&sb, "%g %g %g rg\n-%g -%g %g %g re f\n", opts.PageBackground[0], opts.PageBackground[1], opts.PageBackground[2], bleed, bleed, opts.PageWidth+2*bleed, opts.PageHeight+2*bleed)
+		} else {
+			fmt.Fprintf(&sb, "%g %g %g rg\n0 0 %g %g re f\n", opts.PageBackground[0], opts.PageBackground[1], opts.PageBackground[2], opts.PageWidth, opts.PageHeight)
+		}
 		if opts.PageBackground[3] < 1 {
 			sb.WriteString("Q\n")
 		}
@@ -61,8 +66,46 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 		writeClipEnd(&sb, b)
 	}
 	drawFooter(&sb, footer, opts)
+	drawPageMarks(&sb, opts)
 	comp := flateBytes([]byte(sb.String()))
 	return fmt.Sprintf("<< /Length %d /Filter /FlateDecode >>\nstream\n%s\nendstream", len(comp), comp)
+}
+
+func drawPageMarks(sb *strings.Builder, opts layout.Options) {
+	if opts.PageMarks == 0 {
+		return
+	}
+	offset := opts.PageBleed + 18
+	inner, outer := opts.PageBleed+3, offset-3
+	sb.WriteString("0 G 0.5 w\n")
+	if opts.PageMarks&css.PageMarkCrop != 0 {
+		for _, x := range []float64{0, opts.PageWidth} {
+			for _, y := range []float64{0, opts.PageHeight} {
+				x1, x2 := -outer, -inner
+				if x > 0 {
+					x1, x2 = opts.PageWidth+inner, opts.PageWidth+outer
+				}
+				y1, y2 := -outer, -inner
+				if y > 0 {
+					y1, y2 = opts.PageHeight+inner, opts.PageHeight+outer
+				}
+				fmt.Fprintf(sb, "%g %g m %g %g l S\n", x1, y, x2, y)
+				fmt.Fprintf(sb, "%g %g m %g %g l S\n", x, y1, x, y2)
+			}
+		}
+	}
+	if opts.PageMarks&css.PageMarkCross != 0 {
+		for _, y := range []float64{-opts.PageBleed - 10, opts.PageHeight + opts.PageBleed + 10} {
+			x := opts.PageWidth / 2
+			fmt.Fprintf(sb, "%g %g m %g %g l S\n", x-5, y, x+5, y)
+			fmt.Fprintf(sb, "%g %g m %g %g l S\n", x, y-5, x, y+5)
+		}
+		for _, x := range []float64{-opts.PageBleed - 10, opts.PageWidth + opts.PageBleed + 10} {
+			y := opts.PageHeight / 2
+			fmt.Fprintf(sb, "%g %g m %g %g l S\n", x-5, y, x+5, y)
+			fmt.Fprintf(sb, "%g %g m %g %g l S\n", x, y-5, x, y+5)
+		}
+	}
 }
 
 func fragmentNodesByPaintIndex(roots []*layout.FragmentNode) map[int]*layout.FragmentNode {
