@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice | Northstar Studio</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 38pt;
+      }
+      body {
+        margin: 0;
+        position: relative;
+        color: #292f32;
+        font:
+          9.5pt/1.4 "Times New Roman",
+          sans-serif;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1pt solid #6a5143;
+        padding-bottom: 10pt;
+      }
+      .watermark {
+        height: 450pt;
+        opacity: 0.4;
+        position: absolute;
+        right: -38pt;
+        top: -38pt;
+        width: 300pt;
+      }
+      .identity {
+        display: block;
+      }
+      .logo {
+        display: block;
+        float: left;
+        height: 30pt;
+        margin-right: 8pt;
+        width: 30pt;
+      }
+      .brand {
+        color: #6a5143;
+        font-size: 17pt;
+        font-weight: normal;
+        letter-spacing: 1.4pt;
+      }
+      .brand-note,
+      .muted {
+        color: #62686a;
+      }
+      .document-meta {
+        text-align: right;
+        font-size: 8pt;
+      }
+      h1 {
+        color: #252c30;
+        font-size: 21pt;
+        font-weight: normal;
+        margin: 19pt 0 2pt;
+      }
+      h2 {
+        color: #6a5143;
+        font-size: 9pt;
+        letter-spacing: 0.5pt;
+        margin: 18pt 0 7pt;
+        text-transform: uppercase;
+      }
+      .eyebrow {
+        color: #6a5143;
+        font-size: 7pt;
+        font-weight: bold;
+        letter-spacing: 1pt;
+      }
+      .parties {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28pt;
+        margin-top: 21pt;
+      }
+      .panel {
+        border-top: 1pt solid #b8b2ac;
+        padding-top: 7pt;
+      }
+      .panel strong {
+        color: #6a5143;
+        display: block;
+        font-size: 7pt;
+        letter-spacing: 0.7pt;
+        margin-bottom: 4pt;
+      }
+      .summary {
+        border-bottom: 1pt solid #b8b2ac;
+        border-top: 1pt solid #b8b2ac;
+        display: flex;
+        gap: 0;
+        margin: 20pt 0 18pt;
+      }
+      .summary-card {
+        border-right: 1pt solid #d2ccc5;
+        flex: 1;
+        padding: 7pt 9pt 7pt 0;
+      }
+      .summary-card + .summary-card {
+        padding-left: 9pt;
+      }
+      .summary-card b {
+        color: #6a5143;
+        display: block;
+        font-size: 7pt;
+        letter-spacing: 0.5pt;
+        margin-bottom: 3pt;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border-bottom: 0.75pt solid #c9c5bf;
+        padding: 7pt 5pt;
+        text-align: left;
+      }
+      th {
+        border-bottom: 1.5pt solid #6a5143;
+        color: #6a5143;
+        font-size: 7pt;
+        letter-spacing: 0.5pt;
+        text-transform: uppercase;
+      }
+      .amount {
+        text-align: right;
+      }
+      .totals {
+        margin-top: 12pt;
+        width: 44%;
+      }
+      .totals-wrap {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4pt 5pt;
+      }
+      .total-row.balance {
+        border-top: 1.5pt solid #6a5143;
+        border-bottom: 0.75pt solid #c9c5bf;
+        padding-top: 5pt;
+      }
+      .balance {
+        color: #6a5143;
+        font-size: 13pt;
+        font-weight: bold;
+      }
+      .payment {
+        border-top: 1pt solid #b8b2ac;
+        margin-top: 22pt;
+        padding: 8pt 0;
+      }
+      .payment b {
+        color: #6a5143;
+      }
+      footer {
+        border-top: 1pt solid #b8b2ac;
+        color: #62686a;
+        font-size: 8pt;
+        margin-top: 20pt;
+        padding-top: 8pt;
+      }
+    </style>
+  </head>
+  <body>
+    <img
+      class="watermark"
+      src="examples/assets/northstar-map-watermark.png"
+      alt=""
+    />
+    <header>
+      <div class="identity">
+        <svg
+          class="logo"
+          viewBox="0 0 36 36"
+          role="img"
+          aria-label="Northstar compass logo"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="15"
+            fill="none"
+            stroke="#6a5143"
+            stroke-width="1.5"
+          />
+          <path
+            d="M18 5 21 15 31 18 21 21 18 31 15 21 5 18 15 15Z"
+            fill="#6a5143"
+          />
+          <circle cx="18" cy="18" r="2.5" fill="#fff" />
+        </svg>
+        <div>
+          <div class="brand">NORTHSTAR</div>
+          <div class="brand-note">
+            Independent design office · Quito, Ecuador
+          </div>
+        </div>
+      </div>
+      <div class="document-meta">
+        <div class="eyebrow">INVOICE</div>
+        <b>NS-2026-1048</b><br />
+        Issued 07 October 2026
+      </div>
+    </header>
+
+    <h1>Brand and digital design</h1>
+    <div class="muted">A clear record of the work delivered for your team.</div>
+
+    <div class="parties">
+      <div class="panel">
+        <strong>ISSUED BY</strong>Northstar Studio<br />Av. República 412,
+        Quito<br />billing@northstar.example
+      </div>
+      <div class="panel">
+        <strong>BILL TO</strong>Clear River Cooperative<br />Tax ID
+        1790012345001<br />Accounts payable
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="summary-card"><b>PAYMENT DUE</b>21 October 2026</div>
+      <div class="summary-card"><b>PAYMENT TERMS</b>Net 14 days</div>
+      <div class="summary-card"><b>PROJECT</b>Identity refresh</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Qty.</th>
+          <th class="amount">Rate</th>
+          <th class="amount">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Visual identity system</td>
+          <td>1</td>
+          <td class="amount">$820.00</td>
+          <td class="amount">$820.00</td>
+        </tr>
+        <tr>
+          <td>Brand standards and usage guide</td>
+          <td>1</td>
+          <td class="amount">$360.00</td>
+          <td class="amount">$360.00</td>
+        </tr>
+        <tr>
+          <td>Social media templates</td>
+          <td>8</td>
+          <td class="amount">$35.00</td>
+          <td class="amount">$280.00</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="totals-wrap">
+      <div class="totals">
+        <div class="total-row"><span>Subtotal</span><span>$1,460.00</span></div>
+        <div class="total-row"><span>Tax</span><span>$0.00</span></div>
+        <div class="total-row balance">
+          <span>BALANCE DUE</span><span>$1,460.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="payment">
+      <b>Payment information</b><br />Bank transfer · Account ending in 2048<br />Please
+      include invoice NS-2026-1048 with your payment.
+    </div>
+    <footer>
+      Thank you for trusting Northstar Studio with your next chapter.
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Parcel label | Northstar Logistics</title>
+    <style>
+      @page {
+        size: 100mm 150mm;
+        margin: 7mm;
+      }
+      body {
+        color: #171a1b;
+        font:
+          8.5pt/1.3 Arial,
+          sans-serif;
+      }
+      .label {
+        border: 1.25pt solid #171a1b;
+        padding: 8pt;
+      }
+      header {
+        border-bottom: 1.5pt solid #171a1b;
+        padding-bottom: 6pt;
+      }
+      .brand {
+        color: #171a1b;
+        font-size: 13pt;
+        font-weight: bold;
+      }
+      .service {
+        color: #45494a;
+        font-size: 7pt;
+      }
+      .route {
+        display: flex;
+        justify-content: space-between;
+        margin: 10pt 0;
+      }
+      .route b {
+        color: #171a1b;
+        font-size: 9pt;
+      }
+      .address {
+        border: 1pt solid #85898a;
+        padding: 7pt;
+      }
+      .address p {
+        margin: 3pt 0;
+      }
+      .eyebrow {
+        color: #45494a;
+        font-size: 7pt;
+        font-weight: bold;
+      }
+      .recipient {
+        color: #171a1b;
+        font-size: 12pt;
+        font-weight: bold;
+        margin-top: 3pt;
+      }
+      .postal {
+        border-top: 1pt solid #171a1b;
+        font-size: 25pt;
+        font-weight: bold;
+        margin-top: 8pt;
+        padding-top: 6pt;
+        text-align: left;
+      }
+      .barcode {
+        height: 32pt;
+        margin: 9pt 2pt 4pt;
+      }
+      .barcode svg {
+        height: 32pt;
+        width: 100%;
+      }
+      .tracking {
+        color: #45494a;
+        font-size: 7pt;
+        text-align: center;
+      }
+      .details {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1pt solid #85898a;
+        margin-top: 8pt;
+        padding-top: 7pt;
+      }
+      .warning {
+        border: 1pt solid #171a1b;
+        color: #171a1b;
+        font-weight: bold;
+        margin-top: 7pt;
+        padding: 5pt;
+        text-align: center;
+      }
+      footer {
+        color: #45494a;
+        font-size: 7pt;
+        margin-top: 8pt;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="label">
+      <header>
+        <div class="brand">NORTHSTAR LOGISTICS</div>
+        <div class="service">PRIORITY · NEXT BUSINESS DAY</div>
+      </header>
+      <div class="route"><b>UIO · QUITO</b><b>CUE · CUENCA</b></div>
+      <div class="address">
+        <div class="eyebrow">DELIVER TO</div>
+        <div class="recipient">Brithany C.</div>
+        <p>
+          Solano Avenue 4-81<br />Remigio Crespo, Azuay<br />Ecuador · 010203
+        </p>
+        <b>Phone 099 451 2086</b>
+      </div>
+      <div class="postal">010203</div>
+      <div class="barcode">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="115"
+          height="32"
+          viewBox="0 0 115 32"
+          preserveAspectRatio="none"
+          aria-label="Parcel barcode"
+        >
+          <rect x="0" y="0" width="2" height="32" />
+          <rect x="3" y="0" width="1" height="32" />
+          <rect x="5" y="0" width="3" height="32" />
+          <rect x="9" y="0" width="1" height="32" />
+          <rect x="11" y="0" width="2" height="32" />
+          <rect x="14" y="0" width="2" height="32" />
+          <rect x="17" y="0" width="1" height="32" />
+          <rect x="19" y="0" width="1" height="32" />
+          <rect x="21" y="0" width="3" height="32" />
+          <rect x="25" y="0" width="2" height="32" />
+          <rect x="28" y="0" width="1" height="32" />
+          <rect x="30" y="0" width="2" height="32" />
+          <rect x="33" y="0" width="3" height="32" />
+          <rect x="37" y="0" width="1" height="32" />
+          <rect x="39" y="0" width="1" height="32" />
+          <rect x="41" y="0" width="2" height="32" />
+          <rect x="44" y="0" width="2" height="32" />
+          <rect x="47" y="0" width="1" height="32" />
+          <rect x="49" y="0" width="3" height="32" />
+          <rect x="53" y="0" width="1" height="32" />
+          <rect x="55" y="0" width="2" height="32" />
+          <rect x="58" y="0" width="1" height="32" />
+          <rect x="60" y="0" width="1" height="32" />
+          <rect x="62" y="0" width="3" height="32" />
+          <rect x="66" y="0" width="2" height="32" />
+          <rect x="69" y="0" width="1" height="32" />
+          <rect x="71" y="0" width="2" height="32" />
+          <rect x="74" y="0" width="2" height="32" />
+          <rect x="77" y="0" width="1" height="32" />
+          <rect x="79" y="0" width="3" height="32" />
+          <rect x="83" y="0" width="1" height="32" />
+          <rect x="85" y="0" width="2" height="32" />
+          <rect x="88" y="0" width="1" height="32" />
+          <rect x="90" y="0" width="1" height="32" />
+          <rect x="92" y="0" width="2" height="32" />
+          <rect x="95" y="0" width="3" height="32" />
+          <rect x="99" y="0" width="1" height="32" />
+          <rect x="101" y="0" width="2" height="32" />
+          <rect x="104" y="0" width="1" height="32" />
+          <rect x="106" y="0" width="3" height="32" />
+          <rect x="110" y="0" width="2" height="32" />
+          <rect x="113" y="0" width="1" height="32" />
+        </svg>
+      </div>
+      <div class="tracking">TRACKING · NS-8420-6014-77</div>
+      <div class="details"><span>PARCEL 1 OF 1</span><span>0.8 kg</span></div>
+      <div class="warning">HANDLE WITH CARE · KEEP UPRIGHT</div>
+      <footer>
+        Example shipment · Replace the sample barcode with a carrier-issued
+        code.
+      </footer>
+    </div>
+  </body>
+</html>
