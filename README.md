@@ -92,7 +92,26 @@ func main() {
 
 Pagecraft supports HTML stylesheets and inline styles, physical page sizes and margins through `@page`, page footers with page counters, text wrapping, lists, tables, floats, flexbox, grid, and multi-page layout. It can render borders, backgrounds, common typography, PNG and JPEG images, SVG graphics, links, metadata, and TrueType fonts declared with `@font-face`.
 
-Pagecraft implements a document-focused CSS subset, not a browser. Unsupported CSS may be ignored or render differently from Chromium. The [`examples/`](examples/) directory has complete HTML and PDF pairs for an [invoice](examples/invoice.html), an [operations report](examples/operations-report.html), a [product catalog](examples/product-catalog.html), a [shipping label](examples/shipping-label.html), and a [regional expansion plan with landscape appendices](examples/regional-expansion-plan.html).
+Pagecraft implements a document-focused CSS subset, not a browser. Unsupported CSS may be ignored or render differently from Chromium. The [`examples/`](examples/) directory has complete HTML documents for an [invoice](examples/invoice.html), an [operations report](examples/operations-report.html), a [product catalog](examples/product-catalog.html), a [shipping label](examples/shipping-label.html), and a [regional expansion plan with landscape appendices](examples/regional-expansion-plan.html).
+
+### Example previews
+
+Each preview shows the first page rendered by Pagecraft. Select a preview to open its HTML source.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><a href="examples/invoice.html"><img src="examples/screenshots/invoice-720x1080.jpg" width="360" height="540" alt="Preview of the Northstar Studio invoice" /><br /><strong>Invoice</strong></a></td>
+    <td width="50%" align="center"><a href="examples/operations-report.html"><img src="examples/screenshots/operations-report-720x1080.jpg" width="360" height="540" alt="Preview of the Meridian Services operations report" /><br /><strong>Operations report</strong></a></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="examples/product-catalog.html"><img src="examples/screenshots/product-catalog-720x1080.jpg" width="360" height="540" alt="Preview of the North House Goods product catalog" /><br /><strong>Product catalog</strong></a></td>
+    <td width="50%" align="center"><a href="examples/shipping-label.html"><img src="examples/screenshots/shipping-label-720x1080.jpg" width="360" height="540" alt="Preview of the Northstar Logistics shipping label" /><br /><strong>Shipping label</strong></a></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="examples/regional-expansion-plan.html"><img src="examples/screenshots/regional-expansion-plan-720x1080.jpg" width="360" height="540" alt="Preview of the Meridian Services regional expansion plan" /><br /><strong>Regional expansion plan</strong></a></td>
+    <td width="50%"></td>
+  </tr>
+</table>
 
 ## Development
 
