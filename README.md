@@ -18,6 +18,25 @@ This places the `pagecraft` executable in your Go binary directory. You can also
 go build -o pagecraft ./cmd/pagecraft
 ```
 
+### Download a prebuilt binary
+
+Download the asset for your operating system and CPU from the [latest release](https://github.com/robtrivi/pagecraft/releases/latest). Choose `linux`, `darwin` (macOS), or `windows`, followed by `amd64` for Intel/AMD 64-bit CPUs or `arm64` for 64-bit ARM CPUs. Windows assets end in `.exe`. These binaries are standalone; Go does not need to be installed.
+
+On Linux or macOS, make the downloaded file executable and pass it an HTML file:
+
+```sh
+chmod +x pagecraft-v1.0.0-linux-amd64
+./pagecraft-v1.0.0-linux-amd64 -o report.pdf report.html
+```
+
+For macOS, use the matching `darwin-amd64` or `darwin-arm64` asset. On Windows PowerShell, run the `.exe` directly:
+
+```powershell
+.\pagecraft-v1.0.0-windows-amd64.exe -o report.pdf report.html
+```
+
+Replace `v1.0.0` and the OS/architecture suffix with the values in the asset you downloaded.
+
 ## Use the command
 
 Render an HTML file and choose where to write the PDF:
