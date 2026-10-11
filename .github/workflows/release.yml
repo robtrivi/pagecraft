@@ -74,4 +74,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/* --title "$TAG" --generate-notes
+        run: gh release create "$TAG" dist/* --title "$TAG" --notes-from-tag
