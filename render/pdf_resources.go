@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/images"
-	"github.com/robtrivi/pagecraft-go/layout"
-	"github.com/robtrivi/pagecraft-go/svg"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/images"
+	"github.com/robtrivi/pagecraft/layout"
+	"github.com/robtrivi/pagecraft/svg"
 )
 
 func collectAlphas(pages []layout.Page, opts layout.Options) ([]float64, map[float64]int) {

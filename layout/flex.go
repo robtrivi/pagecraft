@@ -4,8 +4,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 type flexRow []int

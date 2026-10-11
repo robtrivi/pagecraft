@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/robtrivi/pagecraft-go/boxes"
+import "github.com/robtrivi/pagecraft/boxes"
 
 const fragmentEpsilon = 1e-7
 

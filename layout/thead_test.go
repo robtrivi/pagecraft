@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Thead step 1: in multipage tables, the header repeats at the top of

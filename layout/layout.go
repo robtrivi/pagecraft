@@ -5,11 +5,11 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/css"
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/images"
-	"github.com/robtrivi/pagecraft-go/svg"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/images"
+	"github.com/robtrivi/pagecraft/svg"
 )
 
 // Options configures the page and base typography.

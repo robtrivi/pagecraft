@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Position absolute content at offsets from the page content origin.

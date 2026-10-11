@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/layout"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/layout"
 )
 
 func base14Refs(firstID int) string {

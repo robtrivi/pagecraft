@@ -3,7 +3,7 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func overflowClipForBox(box *boxes.Box, x, y, width, height float64, opts Options, fixedHeight bool) *ClipRect {

@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Decoration step 2: decorations reach the placed block for rendering.

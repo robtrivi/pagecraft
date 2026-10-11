@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Inline flow shares line opportunities with floats: one line can use the

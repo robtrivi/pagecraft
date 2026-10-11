@@ -3,7 +3,7 @@ package boxes
 import (
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 )
 
 func applySpacingStyle(b *Box, decls css.Declarations) {

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // pageFragmentState owns the occurrences emitted into one page.

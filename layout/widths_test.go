@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Percent widths should partition the declared table width in the requested

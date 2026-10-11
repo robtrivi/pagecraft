@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/layout"
+	"github.com/robtrivi/pagecraft/layout"
 )
 
 type linkAnnot struct {

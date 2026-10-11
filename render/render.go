@@ -5,10 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/css"
-	"github.com/robtrivi/pagecraft-go/layout"
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
+	"github.com/robtrivi/pagecraft/layout"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 // RenderHTMLToPDF converts HTML to PDF, with one PDF page per layout page.

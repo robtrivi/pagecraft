@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Lists flow by <li> item rather than as one block; each item is a block

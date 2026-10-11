@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/robtrivi/pagecraft-go/boxes"
+import "github.com/robtrivi/pagecraft/boxes"
 
 func horizontalInsets(b *boxes.Box) float64 {
 	insets := boxInsets(b)

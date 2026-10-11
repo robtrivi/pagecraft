@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/images"
+	"github.com/robtrivi/pagecraft/images"
 )
 
 // Image step 4: <img> is embedded as an Image XObject and invoked with Do.

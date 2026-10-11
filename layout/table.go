@@ -1,8 +1,8 @@
 package layout
 
 import (
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 // Table layout resolves intrinsic or explicit auto width and distributes

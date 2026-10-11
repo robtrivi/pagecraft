@@ -3,8 +3,8 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
 )
 
 // sizeBasis carries the containing block size together with whether CSS permits

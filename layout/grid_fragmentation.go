@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func gridRowContentFits(row []gridItem, metrics gridRowLayout, available float64) bool {

@@ -6,8 +6,8 @@ import (
 	"unicode"
 
 	"github.com/go-text/typesetting/segmenter"
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 // lineBreakOpportunityBetween resolves to a draft boundary once. Sizing and line

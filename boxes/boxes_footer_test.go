@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 )
 
 // Footer step 2: @bottom-center reaches the root as chunks.

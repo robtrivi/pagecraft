@@ -3,7 +3,7 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func inlineStreamNaturalWidth(words inlineStream) float64 {

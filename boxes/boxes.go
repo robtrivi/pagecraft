@@ -7,10 +7,10 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/robtrivi/pagecraft-go/css"
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/images"
-	"github.com/robtrivi/pagecraft-go/svg"
+	"github.com/robtrivi/pagecraft/css"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/images"
+	"github.com/robtrivi/pagecraft/svg"
 )
 
 // Box stores a node's content, resources, and metadata.

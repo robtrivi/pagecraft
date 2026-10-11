@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Justification is baked into X positions: non-final lines have extra word

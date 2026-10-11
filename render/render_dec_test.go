@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/layout"
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/layout"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 func TestRender_PaintsInlineBoxDecorationAtItsMeasuredPosition(t *testing.T) {

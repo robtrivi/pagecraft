@@ -9,7 +9,7 @@ The rendering engine is written in Go and is inspired by [WeasyPrint](https://we
 Install the command with Go:
 
 ```sh
-go install github.com/robtrivi/pagecraft-go/cmd/pagecraft@latest
+go install github.com/robtrivi/pagecraft/cmd/pagecraft@latest
 ```
 
 This places the `pagecraft` executable in your Go binary directory. You can also build it from a checkout:
@@ -62,7 +62,7 @@ The same process interface works from JavaScript, Ruby, PHP, Rust, shell scripts
 Add Pagecraft to a Go project:
 
 ```sh
-go get github.com/robtrivi/pagecraft-go
+go get github.com/robtrivi/pagecraft
 ```
 
 The Go API returns the PDF as a byte slice:
@@ -73,7 +73,7 @@ package main
 import (
  "os"
 
- "github.com/robtrivi/pagecraft-go/render"
+ "github.com/robtrivi/pagecraft/render"
 )
 
 func main() {

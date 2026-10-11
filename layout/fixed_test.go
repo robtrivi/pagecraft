@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Fixed positioning step 2: the box appears on EVERY page without moving flow.

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // A line-height factor of 2 doubles the height from 12 pt to 24 pt.

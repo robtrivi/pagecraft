@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func TestNestedContainerInsets_AnonymousInlineFragmentDoesNotNestAgain(t *testing.T) {

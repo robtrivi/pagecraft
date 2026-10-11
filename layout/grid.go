@@ -3,8 +3,8 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 // Grid supports row/column auto-flow with fixed px/pt tracks, fr and

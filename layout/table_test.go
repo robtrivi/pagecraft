@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 func TestLayout_TableRowsUseDestinationPageCapacity(t *testing.T) {

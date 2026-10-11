@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Absolute positioning supports top/left in px from the current page's

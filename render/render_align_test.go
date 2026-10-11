@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 // Text-align step 3: center/right shift X per line; justify uses word

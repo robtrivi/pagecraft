@@ -1,4 +1,4 @@
-module github.com/robtrivi/pagecraft-go
+module github.com/robtrivi/pagecraft
 
 go 1.26.0
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 func TestLayout_FontForSelectsWeightVariant(t *testing.T) {

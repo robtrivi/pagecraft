@@ -3,7 +3,7 @@ package boxes
 import (
 	"strconv"
 
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 	"golang.org/x/net/html"
 )
 

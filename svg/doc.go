@@ -9,7 +9,7 @@ import (
 	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
 
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 )
 
 // Shape contains the shape's geometry and resolved paint attributes.

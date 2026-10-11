@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func unboundedFragmentainerPageHeight(pageHeight float64) float64 {

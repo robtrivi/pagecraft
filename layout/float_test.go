@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Floats follow the CSS model: they do not advance the cursor; short text

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/fonts"
+	"github.com/robtrivi/pagecraft/fonts"
 )
 
 func TestRender_TTFBaselineCentersLeadingForNormalAndExplicitLineHeight(t *testing.T) {

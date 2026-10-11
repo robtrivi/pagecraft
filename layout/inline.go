@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-text/typesetting/bidi"
 	"github.com/go-text/typesetting/language"
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/images"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/images"
 )
 
 // TextRun represents a positioned inline item: text or a replaced image.

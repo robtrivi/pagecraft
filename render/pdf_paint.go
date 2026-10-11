@@ -10,13 +10,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/css"
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/images"
-	"github.com/robtrivi/pagecraft-go/layout"
-	"github.com/robtrivi/pagecraft-go/svg"
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/images"
+	"github.com/robtrivi/pagecraft/layout"
+	"github.com/robtrivi/pagecraft/svg"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Raster]int, svgIndex map[*svg.Document]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, footer string, gs map[float64]int, forms map[int]opacityFormRef) string {

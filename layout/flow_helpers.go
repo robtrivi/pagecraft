@@ -3,7 +3,7 @@ package layout
 import (
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func shiftPlacedBox(block *PlacedBox, dx, dy float64) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 type intrinsicInlineWidths struct {

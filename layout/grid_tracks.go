@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/robtrivi/pagecraft-go/boxes"
+import "github.com/robtrivi/pagecraft/boxes"
 
 func gridAutoColumnFraction(g *boxes.Box, index int) float64 {
 	if len(g.Style.GridAutoColumnFractions) == 0 {

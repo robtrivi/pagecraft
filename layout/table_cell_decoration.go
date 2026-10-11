@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/robtrivi/pagecraft-go/boxes"
+import "github.com/robtrivi/pagecraft/boxes"
 
 // tableCellBlockDecorations derives fragment boxes from the same line ranges used
 // for cell sizing and pagination. The block ancestry preserves nested wrapper

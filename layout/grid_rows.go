@@ -3,7 +3,7 @@ package layout
 import (
 	"math"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func gridItemTrackContribution(item *boxes.Box, contentHeight float64, contentIncludesInsets bool, opts Options) float64 {

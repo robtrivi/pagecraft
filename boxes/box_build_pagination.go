@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 )
 
 func applyPaginationStyle(b *Box, decls css.Declarations) {

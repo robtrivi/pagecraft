@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/css"
-	"github.com/robtrivi/pagecraft-go/fonts"
-	"github.com/robtrivi/pagecraft-go/layout"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
+	"github.com/robtrivi/pagecraft/fonts"
+	"github.com/robtrivi/pagecraft/layout"
 )
 
 func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Metadata, footer []css.ContentChunk) []byte {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 func TestLayout_GridWrapsTallItemAcrossPages(t *testing.T) {

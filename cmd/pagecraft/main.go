@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/render"
+	"github.com/robtrivi/pagecraft/render"
 	"golang.org/x/net/html"
 )
 

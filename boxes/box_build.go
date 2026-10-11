@@ -1,7 +1,7 @@
 package boxes
 
 import (
-	"github.com/robtrivi/pagecraft-go/css"
+	"github.com/robtrivi/pagecraft/css"
 	"golang.org/x/net/html"
 )
 

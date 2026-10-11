@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
+	"github.com/robtrivi/pagecraft/boxes"
 )
 
 // Image step 3: <img> in normal flow is sized by aspect ratio (1px = 1pt),

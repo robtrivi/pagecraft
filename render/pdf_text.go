@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 // drawText emits the PDF text operator, including AFM kerning where available.

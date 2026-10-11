@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/robtrivi/pagecraft-go/boxes"
-	"github.com/robtrivi/pagecraft-go/text"
+	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/text"
 )
 
 // Bold step 2: the block carries Bold and Flow measures with bold widths.
