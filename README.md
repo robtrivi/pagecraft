@@ -62,6 +62,47 @@ Options:
 
 When the input is a file, relative stylesheets, images, and fonts are resolved from that file's directory. An explicit HTML `<base>` element takes precedence. For HTML from stdin, relative resources are resolved from the process working directory.
 
+## Run Pagecraft as a service
+
+For applications outside Go that render PDFs frequently, keep Pagecraft running and send it one HTML document per request:
+
+```sh
+pagecraft serve -addr 127.0.0.1:8080 -workers 4
+```
+
+The service exposes `POST /render` and returns `application/pdf`. `GET /healthz` returns `ok` when the service is available. The default worker count is the Go runtime's `GOMAXPROCS`; set `-workers` to cap simultaneous renders. The maximum request body defaults to 10 MiB. Configure it in bytes with `-max-body-bytes`, or directly in mebibytes with `-max-body-mib`:
+
+```sh
+pagecraft serve -max-body-mib 90
+```
+
+Here, `90` means 90 MiB (94,371,840 bytes). If both size flags are provided, `-max-body-mib` takes precedence.
+
+```sh
+curl --data-binary @invoice.html \
+  -H 'Content-Type: text/html; charset=utf-8' \
+  http://127.0.0.1:8080/render \
+  -o invoice.pdf
+```
+
+A Java service can build the HTML from its own data and templates, then reuse an HTTP client to send each document:
+
+```java
+HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:8080/render"))
+    .header("Content-Type", "text/html; charset=utf-8")
+    .POST(HttpRequest.BodyPublishers.ofString(html))
+    .build();
+
+HttpResponse<byte[]> response = HttpClient.newHttpClient().send(
+    request, HttpResponse.BodyHandlers.ofByteArray());
+if (response.statusCode() != 200) {
+    throw new IOException("Pagecraft returned HTTP " + response.statusCode());
+}
+Files.write(Path.of("invoice.pdf"), response.body());
+```
+
+The server binds to loopback by default. Only send it trusted HTML, and restrict network access if binding it to another interface. Add a `<base href="...">` to HTML that refers to relative resources.
+
 ### Call it from another language
 
 For example, a Python application can invoke Pagecraft and pass HTML through stdin:

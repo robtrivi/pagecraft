@@ -2,29 +2,47 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/robtrivi/pagecraft/render"
 	"golang.org/x/net/html"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(runMain(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runWithContext(ctx, args, stdin, stdout, stderr)
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return runWithContext(context.Background(), args, stdin, stdout, stderr)
+}
+
+func runWithContext(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "serve" {
+		return runServer(ctx, args[1:], stderr)
+	}
+
 	flags := flag.NewFlagSet("pagecraft", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	outputPath := flags.String("o", "", "write PDF to this file (default: stdout; use - for stdout)")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: pagecraft [options] [input.html]")
 		fmt.Fprintln(stderr, "Render an HTML document to PDF. Read HTML from stdin when no input file is given.")
+		fmt.Fprintln(stderr, "       pagecraft serve [options]")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
