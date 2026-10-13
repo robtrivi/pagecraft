@@ -212,6 +212,34 @@ func TestLayout_CSSDisplayTableRowWrapsDirectBlocksInAnonymousCells(t *testing.T
 	}
 }
 
+func TestLayout_CSSDisplayTableWrapsDirectTextInAnonymousCells(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0">Direct text</div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	var rendered strings.Builder
+	var contentBlock *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				rendered.WriteString(run.Text)
+				rendered.WriteByte(' ')
+			}
+		}
+		if strings.Contains(rendered.String(), "Direct") {
+			contentBlock = &block
+		}
+	}
+	if got := strings.Join(strings.Fields(rendered.String()), " "); got != "Direct text" {
+		t.Fatalf("rendered table text=%q, want Direct text", got)
+	}
+	if contentBlock == nil || contentBlock.X != 0 || contentBlock.Width != 100 {
+		t.Errorf("anonymous text cell geometry = %#v, want x=0 and width=100pt", contentBlock)
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {

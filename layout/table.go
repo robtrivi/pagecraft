@@ -1,6 +1,8 @@
 package layout
 
 import (
+	"strings"
+
 	"github.com/robtrivi/pagecraft/boxes"
 	"github.com/robtrivi/pagecraft/fonts"
 )
@@ -723,7 +725,7 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 		body = append(body, anonymousTableRow(t, anonymousChildren))
 		anonymousChildren = nil
 	}
-	for _, c := range t.Children {
+	for _, c := range tableContentChildren(t) {
 		switch {
 		case isTableRow(c):
 			flushAnonymousRow()
@@ -756,7 +758,7 @@ func tableRowsInGroup(group *boxes.Box) []*boxes.Box {
 		rows = append(rows, anonymousTableRow(group, anonymousChildren))
 		anonymousChildren = nil
 	}
-	for _, child := range group.Children {
+	for _, child := range tableContentChildren(group) {
 		switch {
 		case isTableRow(child):
 			flushAnonymousRow()
@@ -807,7 +809,33 @@ func anonymousTableCells(parent *boxes.Box, children []*boxes.Box) []*boxes.Box 
 }
 
 func tableCells(r *boxes.Box) []*boxes.Box {
-	return anonymousTableCells(r, r.Children)
+	return anonymousTableCells(r, tableContentChildren(r))
+}
+
+func tableContentChildren(parent *boxes.Box) []*boxes.Box {
+	if len(parent.Parts) == 0 {
+		return parent.Children
+	}
+	children := make([]*boxes.Box, 0, len(parent.Parts))
+	for _, part := range parent.Parts {
+		if part.Child != nil {
+			children = append(children, part.Child)
+			continue
+		}
+		if strings.TrimSpace(part.Text) == "" {
+			continue
+		}
+		style := parent.Style
+		style.Display = boxes.DisplayInline
+		children = append(children, &boxes.Box{
+			Tag:    "anonymous-table-text",
+			Style:  style,
+			Text:   part.Text,
+			Parts:  []boxes.Part{{Text: part.Text}},
+			Parent: parent,
+		})
+	}
+	return children
 }
 
 func tableRowGroup(row *boxes.Box) *boxes.Box {
