@@ -240,6 +240,22 @@ func TestLayout_ColumnBalancingRaisesTargetForUnbreakableUnits(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnBalancingKeepsAvoidBreakGroupTogether(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><div style="margin:0;padding:1pt 0;font:1pt/23pt Helvetica">A</div><div style="margin:0;padding:1pt 0;font:1pt/18pt Helvetica;break-after:avoid">B</div><div style="margin:0;padding:1pt 0;font:1pt/18pt Helvetica">C</div><div style="margin:0;padding:1pt 0;font:1pt/23pt Helvetica">D</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 200, 10
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 4 {
+		t.Fatalf("blocks=%d, want 4", len(blocks))
+	}
+	if blocks[1].X != blocks[2].X {
+		t.Errorf("avoid group split across columns: B x=%g, C x=%g", blocks[1].X, blocks[2].X)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {
