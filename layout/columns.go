@@ -265,7 +265,11 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 				breakBefore := fragmentBreakAuto
 				if lineOffset == 0 {
-					breakBefore = pageBreakValue(it.Style.BreakBefore)
+					if index > 0 && forcedPageBreakBetween(kids[index-1], it) {
+						breakBefore = fragmentBreakPage
+					} else {
+						breakBefore = pageBreakValue(it.Style.BreakBefore)
+					}
 				}
 				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 				lineShift := fragmentPlan.y - yc
