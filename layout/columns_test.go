@@ -2,6 +2,7 @@ package layout
 
 import (
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -162,6 +163,44 @@ func TestLayout_ColumnRowsContinueAtPageTopAfterUsedColumns(t *testing.T) {
 		if index >= len(order) || order[index] != want {
 			t.Errorf("block order=%v, want ITEM 1 through ITEM 8 in source order", order)
 			break
+		}
+	}
+}
+
+func TestLayout_ColumnBalancingFillsEarlierPageRowsBeforeLastRow(t *testing.T) {
+	var content strings.Builder
+	for index := 1; index <= 14; index++ {
+		content.WriteString(`<div style="margin:0;height:30pt;padding:1pt 0">ITEM `)
+		content.WriteString(strconv.Itoa(index))
+		content.WriteString(`</div>`)
+	}
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0">` + content.String() + `</div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 120, 10
+	pages := Flow(root, opts)
+	if len(pages) != 3 {
+		t.Fatalf("pages=%d, want 3 rows of columns", len(pages))
+	}
+	wantCounts := []int{6, 6, 2}
+	for pageIndex, page := range pages {
+		if len(page.Blocks) != wantCounts[pageIndex] {
+			t.Errorf("page %d blocks=%d, want %d", pageIndex+1, len(page.Blocks), wantCounts[pageIndex])
+		}
+		columns := map[int]int{}
+		for _, block := range page.Blocks {
+			columns[block.FragmentainerIndex]++
+			if block.Y+block.Height > 110+fragmentEpsilon {
+				t.Errorf("page %d %q ends at y=%g, below the page content bottom", pageIndex+1, block.Text, block.Y+block.Height)
+			}
+		}
+		if pageIndex < 2 && (columns[1] != 3 || columns[2] != 3) {
+			t.Errorf("page %d column counts=%v, want 3 items in each column", pageIndex+1, columns)
+		}
+		if pageIndex == 2 && (columns[1] != 1 || columns[2] != 1) {
+			t.Errorf("last page column counts=%v, want one item in each balanced column", columns)
 		}
 	}
 }

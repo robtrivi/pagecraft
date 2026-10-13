@@ -130,8 +130,7 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 	runs := splitColumnContentRuns(kids, layouts, opts)
 	target := math.Max(0, bottom-y)
 	if balance {
-		target = distributeImplicitColumnBreaks(runs, n)
-		target = raiseTargetForLegalBreaks(runs, target)
+		target = balancedColumnRowTarget(runs, n, math.Max(0, bottom-y))
 	}
 	if !balance {
 		end, _ := flowColumnRuns(container, runs, y, pages, opts, usable, bottom, n, gap, colW, target, false)
@@ -214,7 +213,7 @@ func flowColumnRuns(container *boxes.Box, runs []columnContentRun, y float64, pa
 		if !balance {
 			runTarget = math.Max(0, bottom-y)
 		}
-		runEnd, runShortage := flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget)
+		runEnd, runShortage := flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget, balance)
 		y = runEnd
 		if balance {
 			shortage = math.Max(shortage, runShortage)
@@ -269,7 +268,7 @@ func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int
 	return count
 }
 
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64) (float64, float64) {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64, balance bool) (float64, float64) {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
 	index, lineOffset, end := 0, 0, y
@@ -450,6 +449,8 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			end = row.top
 			if container.Style.ColumnFill == boxes.ColumnFillAuto {
 				target = math.Max(0, bottom-y)
+			} else if balance {
+				target = balancedColumnRowTarget(splitColumnContentRuns(kids[index:], layouts[index:], opts), n, math.Max(0, bottom-y))
 			}
 		}
 	}
@@ -495,6 +496,21 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		shortage = 0
 	}
 	return end, shortage
+}
+
+func balancedColumnRowTarget(runs []columnContentRun, columns int, available float64) float64 {
+	if len(runs) == 0 || available <= 0 {
+		return 0
+	}
+	contentHeight := 0.0
+	for _, run := range runs {
+		contentHeight += run.contentHeight
+	}
+	if contentHeight > float64(columns)*available+fragmentEpsilon {
+		return available
+	}
+	target := distributeImplicitColumnBreaks(runs, columns)
+	return raiseTargetForLegalBreaks(runs, target)
 }
 
 func nextColumnRow(current columnRowCursor, y float64, pages *[]Page) columnRowCursor {
