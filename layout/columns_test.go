@@ -192,6 +192,32 @@ func TestLayout_ColumnsBalanceIndivisibleBlocksAcrossAllColumns(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnForcedBreakStartsNewContentRunInFirstColumn(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0;font:10pt/20pt Helvetica">A</p><p style="margin:0;font:10pt/20pt Helvetica">B</p><p style="margin:0;font:10pt/20pt Helvetica">C</p><p style="margin:0;font:10pt/20pt Helvetica;break-before:page">D</p><p style="margin:0;font:10pt/20pt Helvetica">E</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 200, 10
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("pages=%d, want 2", len(pages))
+	}
+	var forced *PlacedBox
+	for index := range pages[1].Blocks {
+		if pages[1].Blocks[index].Text == "D" {
+			forced = &pages[1].Blocks[index]
+			break
+		}
+	}
+	if forced == nil {
+		t.Fatal("the content after break-before:page was not placed on page 2")
+	}
+	if forced.X != 10 || forced.FragmentainerIndex != 1 {
+		t.Errorf("forced content starts at x=%g in column %d, want first column at x=10", forced.X, forced.FragmentainerIndex)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {

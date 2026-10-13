@@ -13,6 +13,12 @@ type columnItemLayout struct {
 	balanceExtra float64
 }
 
+type columnContentRun struct {
+	kids       []*boxes.Box
+	layouts    []columnItemLayout
+	forcedPage bool
+}
+
 // Column sets flow content into equal-width fragmentainers separated by a gap.
 
 // flowColumns places children in N columns from and and returns the cursor
@@ -65,7 +71,34 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		}
 		layouts[index] = columnItemLayout{lines: lines, height: height}
 	}
-	return flowColumnFragments(container, kids, layouts, y, pages, opts, usable, bottom, n, gap, colW, balance)
+	for _, run := range splitColumnContentRuns(kids, layouts) {
+		if run.forcedPage {
+			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
+			fragment := placeFragmentUnitForPage(fragmentUnit{breakBefore: fragmentBreakPage}, y, opts.top(), bottom, pageHasContent, pages, opts)
+			y = fragment.y
+		}
+		y = flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, balance)
+	}
+	return y
+}
+
+func splitColumnContentRuns(kids []*boxes.Box, layouts []columnItemLayout) []columnContentRun {
+	var runs []columnContentRun
+	start := 0
+	for index := 1; index <= len(kids); index++ {
+		if index < len(kids) && !forcedPageBreakBetween(kids[index-1], kids[index]) {
+			continue
+		}
+		if start < index {
+			runs = append(runs, columnContentRun{
+				kids:       kids[start:index],
+				layouts:    layouts[start:index],
+				forcedPage: start > 0,
+			})
+		}
+		start = index
+	}
+	return runs
 }
 
 func isMultiColumn(b *boxes.Box) bool {
