@@ -654,6 +654,25 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				fs := resolveSize(it, opts)
 				_, font := measureFor(opts, it)
 				contentWidth := math.Max(0, contentColW-horizontalInsets(it))
+				if it.Tag != "anonymous" && isMultiColumn(it) {
+					marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
+					columnLimit := math.Max(y+target, columnBottom)
+					if used > 0 && yc+item.height+marginGap+it.Style.MarginBottom > columnLimit+fragmentEpsilon {
+						if col == n-1 {
+							recordColumnShortage(&shortage, yc+item.height+marginGap+it.Style.MarginBottom-columnLimit)
+						}
+						break
+					}
+					columnStart := yc + marginGap - it.Style.MarginTop
+					columnOpts := opts.withinPageHorizontalRange(contentX, contentColW)
+					columnEnd := flowColumns(it, columnStart, pages, columnOpts, contentColW, bottom)
+					used += columnEnd - yc
+					yc = columnEnd
+					columnBottom = math.Max(columnBottom, columnEnd)
+					previousBottomMargin, hasPreviousItem = 0, false
+					index++
+					continue
+				}
 				if it.Style.Float != boxes.FloatNone {
 					columnFloat := placeColumnFloat(it, yc, contentX, contentColW, col+1, pages, opts)
 					columnFloats = append(columnFloats, columnFloat)

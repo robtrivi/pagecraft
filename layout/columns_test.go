@@ -39,6 +39,46 @@ func TestLayout_Columns_DistributesChildren(t *testing.T) {
 	}
 }
 
+func TestLayout_NestedColumnsLayOutTheirOwnFragmentainers(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><div style="column-count:2;column-gap:0"><p style="margin:0;height:24pt">INNER FIRST</p><p style="margin:0;height:24pt">INNER SECOND</p></div><p style="margin:0">OUTER FOLLOWING</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	pages := Flow(root, testOptions())
+	if len(pages) != 1 {
+		t.Fatalf("pages=%d, want 1", len(pages))
+	}
+	if !pageContainsText(pages[0], "INNER FIRST") || !pageContainsText(pages[0], "INNER SECOND") {
+		var texts []string
+		for _, block := range pages[0].Blocks {
+			texts = append(texts, block.Text)
+		}
+		t.Fatalf("nested column contents were not laid out: %q", texts)
+	}
+	var first, second, following *PlacedBox
+	for index := range pages[0].Blocks {
+		block := &pages[0].Blocks[index]
+		switch {
+		case strings.Contains(block.Text, "INNER FIRST"):
+			first = block
+		case strings.Contains(block.Text, "INNER SECOND"):
+			second = block
+		case strings.Contains(block.Text, "OUTER FOLLOWING"):
+			following = block
+		}
+	}
+	if first == nil || second == nil || following == nil {
+		t.Fatalf("missing nested or following content: first=%t second=%t following=%t", first != nil, second != nil, following != nil)
+	}
+	if first.X == second.X {
+		t.Errorf("nested children x=%g/%g, want distinct inner columns", first.X, second.X)
+	}
+	nestedBottom := math.Max(first.Y+first.Height, second.Y+second.Height)
+	if following.Y < nestedBottom-fragmentEpsilon {
+		t.Errorf("following outer content y=%g, overlaps nested multicolumn content ending at y=%g", following.Y, nestedBottom)
+	}
+}
+
 func TestLayout_ColumnWidthDeterminesCountAndUsedWidth(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-width:200pt;column-gap:18pt"><p style="margin:0">A</p><p style="margin:0">B</p></div>`)
 	if err != nil {
