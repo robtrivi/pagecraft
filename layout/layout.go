@@ -622,7 +622,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			previousBlockMarginBottom, hasPreviousBlock = b.Style.MarginBottom, true
 			continue
 		}
-		if b.Style.ColCount > 1 {
+		if isMultiColumn(b) {
 			gap := blockTopMarginGap(previousBlockMarginBottom, hasPreviousBlock, root.Style.BodyMargin, b.Style.MarginTop)
 			contextY, contextOpts, contextWidth := placeFormattingContextAroundFloats(b, y+gap-b.Style.MarginTop, floats, len(pages)-1, opts, usable)
 			y = flowColumns(b, contextY, &pages, contextOpts, contextWidth, bottom)
@@ -708,7 +708,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 				previousBlockMarginBottom, hasPreviousBlock = it.Style.MarginBottom, true
 				continue
 			}
-			if it.Style.ColCount > 1 {
+			if isMultiColumn(it) {
 				gap := blockTopMarginGap(previousBlockMarginBottom, hasPreviousBlock, root.Style.BodyMargin, it.Style.MarginTop)
 				contextY, contextOpts, contextWidth := placeFormattingContextAroundFloats(it, y+gap-it.Style.MarginTop, floats, len(pages)-1, opts, usable)
 				y = flowColumns(it, contextY, &pages, contextOpts, contextWidth, bottom)

@@ -25,6 +25,12 @@ func applyColumnsStyle(b *Box, decls css.Declarations) {
 			b.Style.ColCount = n
 		}
 	}
+	if width, ok := decls["column-width"]; ok {
+		if value, valid := parseColumnWidth(width); valid {
+			b.Style.ColumnWidth = value
+			b.Style.HasColumnWidth = true
+		}
+	}
 	if gap, ok := decls["gap"]; ok {
 		if row, column, valid := parseGap(gap); valid {
 			b.Style.RowGap, b.Style.RowGapPercent = row.length, row.percent
@@ -43,6 +49,11 @@ func applyColumnsStyle(b *Box, decls css.Declarations) {
 			}
 		}
 	}
+}
+
+func parseColumnWidth(value string) (float64, bool) {
+	width, valid := tryLengthPx(strings.TrimSpace(value))
+	return width, valid && width >= 0
 }
 
 func applyBoxSizingStyle(b *Box, decls css.Declarations) {

@@ -12,3 +12,14 @@ func TestBoxes_ParsesColumnRule(t *testing.T) {
 		t.Errorf("column-rule: width=%v color=%v", box.Style.ColumnRuleWidth, box.Style.ColumnRuleColor)
 	}
 }
+
+func TestBoxes_ParsesColumnWidth(t *testing.T) {
+	root, err := Build(`<div style="column-width:200pt"></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	style := root.Children[0].Style
+	if !style.HasColumnWidth || style.ColumnWidth != 200 {
+		t.Errorf("column-width: has=%v width=%v, want true/200pt", style.HasColumnWidth, style.ColumnWidth)
+	}
+}

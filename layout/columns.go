@@ -13,9 +13,7 @@ type columnItemLayout struct {
 	balanceExtra float64
 }
 
-// Simple columns: column-count distributes children in order into balanced
-// blocks (ceil(M/N) per column). A child is never split across columns; each
-// column paginates independently. Column width and gap are unsupported.
+// Column sets flow content into equal-width fragmentainers separated by a gap.
 
 // flowColumns places children in N columns from and and returns the cursor
 // (the end of the tallest column).
@@ -41,11 +39,8 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 	if len(kids) == 0 {
 		return y
 	}
-	n := container.Style.ColCount
-	if n < 1 {
-		n = 1
-	}
 	gap := container.Style.ColumnGap + usable*container.Style.ColumnGapPercent/100
+	n := usedColumnCount(container.Style, usable, gap)
 	colW := (usable - float64(n-1)*gap) / float64(n)
 	layouts := make([]columnItemLayout, len(kids))
 	remainingHeight := 0.0
@@ -142,6 +137,28 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		}
 	}
 	return end
+}
+
+func isMultiColumn(b *boxes.Box) bool {
+	return b != nil && (b.Style.ColCount > 1 || b.Style.HasColumnWidth)
+}
+
+func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int {
+	if !style.HasColumnWidth {
+		if style.ColCount > 0 {
+			return style.ColCount
+		}
+		return 1
+	}
+	width := math.Max(style.ColumnWidth, 0.75)
+	count := int(math.Floor((availableWidth + gap) / (width + gap)))
+	if count < 1 {
+		count = 1
+	}
+	if style.ColCount > 0 && count > style.ColCount {
+		count = style.ColCount
+	}
+	return count
 }
 
 func hasSplittableColumnText(kids []*boxes.Box) bool {

@@ -27,7 +27,7 @@ func nestedContainerInsets(b *boxes.Box) (containerInsets, bool) {
 			hasFloat = true
 			continue
 		}
-		specialLayout := child.Style.Display == boxes.DisplayFlex || child.Style.Display == boxes.DisplayGrid || child.Style.ColCount > 1 || isTableFormattingContext(child)
+		specialLayout := child.Style.Display == boxes.DisplayFlex || child.Style.Display == boxes.DisplayGrid || isMultiColumn(child) || isTableFormattingContext(child)
 		if child.Style.Display != boxes.DisplayBlock && child.Style.Display != boxes.DisplayInline && child.Tag != "br" && !specialLayout || child.Style.Position == boxes.PositionFixed {
 			return containerInsets{}, false
 		}

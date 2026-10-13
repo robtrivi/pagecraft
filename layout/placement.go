@@ -135,7 +135,7 @@ func isKeepable(b *boxes.Box) bool {
 	if b.Image != nil || b.Style.Float != boxes.FloatNone || b.Style.Position == boxes.PositionAbsolute {
 		return false
 	}
-	if b.Style.Display == boxes.DisplayFlex || b.Style.Display == boxes.DisplayGrid || b.Style.ColCount > 1 {
+	if b.Style.Display == boxes.DisplayFlex || b.Style.Display == boxes.DisplayGrid || isMultiColumn(b) {
 		return false
 	}
 	return !isTableFormattingContext(b) && b.Tag != "ul" && b.Tag != "ol"

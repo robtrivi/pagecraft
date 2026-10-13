@@ -106,7 +106,7 @@ func normalFlowItems(b *boxes.Box) []*boxes.Box {
 		if child.Style.Float != boxes.FloatNone || child.Style.Position != boxes.PositionStatic {
 			return []*boxes.Box{b}
 		}
-		if child.Style.Display == boxes.DisplayFlex || child.Style.Display == boxes.DisplayGrid || child.Style.ColCount > 1 ||
+		if child.Style.Display == boxes.DisplayFlex || child.Style.Display == boxes.DisplayGrid || isMultiColumn(child) ||
 			isTableFormattingContext(child) || child.Tag == "ul" || child.Tag == "ol" {
 			items = append(items, child)
 			continue

@@ -37,6 +37,23 @@ func TestLayout_Columns_DistributesChildren(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnWidthDeterminesCountAndUsedWidth(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-width:200pt;column-gap:18pt"><p style="margin:0">A</p><p style="margin:0">B</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	if len(blocks) != 2 {
+		t.Fatalf("blocks=%d, want 2", len(blocks))
+	}
+	if blocks[0].X != 72 || blocks[1].X != 306.5 {
+		t.Errorf("column positions=%v/%v, want 72/306.5", blocks[0].X, blocks[1].X)
+	}
+	if blocks[0].Width != 216.5 || blocks[1].Width != 216.5 {
+		t.Errorf("column widths=%v/%v, want 216.5/216.5", blocks[0].Width, blocks[1].Width)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {

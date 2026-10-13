@@ -35,7 +35,9 @@ type ComputedStyle struct {
 	RowGap, ColumnGap                        float64 // CSS gap in points
 	RowGapPercent, ColumnGapPercent          float64 // percentage component of the gap
 	ColCount                                 int     // column-count (0 = no columns)
-	ColumnSpanAll                            bool    // column-span: all
+	ColumnWidth                              float64 // column-width in points
+	HasColumnWidth                           bool
+	ColumnSpanAll                            bool // column-span: all
 	ColumnRuleWidth                          float64
 	ColumnRuleColor                          [4]float64
 	AlignItems                               FlexAlignment // flex-start | center | flex-end | baseline | stretch

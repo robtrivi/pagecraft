@@ -490,7 +490,7 @@ func flowGrid(g *boxes.Box, y float64, pages *[]Page, opts Options, usable, bott
 // inside its track width. Grid placement owns the outer item box; the regular
 // flow layout owns its descendants and their styles/decorations.
 func layoutGridItemChildren(item *boxes.Box, width float64, opts Options) ([]*FragmentNode, float64) {
-	if item.Style.Display == boxes.DisplayFlex || item.Style.Display == boxes.DisplayGrid || item.Style.ColCount > 1 || isTableFormattingContext(item) {
+	if item.Style.Display == boxes.DisplayFlex || item.Style.Display == boxes.DisplayGrid || isMultiColumn(item) || isTableFormattingContext(item) {
 		return layoutGridItemFormattingContext(item, width, opts)
 	}
 	inset := boxInsets(item)
