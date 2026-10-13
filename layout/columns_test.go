@@ -421,6 +421,25 @@ func TestLayout_Columns_SpannerSeparatesSegments(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnSpanBreakAfterPageStartsFollowingSegmentOnNewPage(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0">BEFORE SPANNER</p><h2 style="column-span:all;margin:0;break-after:page">SPANNER</h2><p style="margin:0">AFTER SPANNER</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 120, 0
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("pages=%d, want 2", len(pages))
+	}
+	if !pageContainsText(pages[0], "BEFORE SPANNER") || !pageContainsText(pages[0], "SPANNER") {
+		t.Fatal("content before the forced break must remain on page 1")
+	}
+	if pageContainsText(pages[0], "AFTER SPANNER") || !pageContainsText(pages[1], "AFTER SPANNER") {
+		t.Fatal("the segment after a spanner with break-after:page must start on page 2")
+	}
+}
+
 func TestLayout_Columns_DrawsRulesInGaps(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:3;column-gap:18pt;column-rule:1pt solid #cbd5e1"><p style="margin:0">A</p><p style="margin:0">B</p><p style="margin:0">C</p></div>`)
 	if err != nil {

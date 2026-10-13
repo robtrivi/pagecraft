@@ -40,6 +40,11 @@ func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, b
 		}
 		y = flowColumnSpan(items[span], y, pages, opts, usable, bottom)
 		start = span + 1
+		if start < len(items) && items[span].Style.BreakAfter == boxes.BreakAfterPage {
+			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
+			fragment := placeFragmentUnitForPage(fragmentUnit{breakBefore: fragmentBreakPage}, y, opts.top(), bottom, pageHasContent, pages, opts)
+			y = fragment.y
+		}
 	}
 	return y + c.Style.MarginBottom
 }
