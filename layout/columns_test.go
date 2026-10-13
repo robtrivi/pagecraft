@@ -459,6 +459,35 @@ func TestLayout_Columns_SpannerSeparatesSegments(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnSpanDescendantBreaksOutThroughUnstyledWrapper(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><section><p style="margin:0">BEFORE SPANNER</p><h2 style="column-span:all;margin:0">NESTED SPANNER</h2><p style="margin:0">AFTER SPANNER</p></section></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	var before, span, after *PlacedBox
+	for index := range blocks {
+		block := &blocks[index]
+		switch block.Text {
+		case "BEFORE SPANNER":
+			before = block
+		case "NESTED SPANNER":
+			span = block
+		case "AFTER SPANNER":
+			after = block
+		}
+	}
+	if before == nil || span == nil || after == nil {
+		t.Fatalf("nested flow lost content: before=%v spanner=%v after=%v", before, span, after)
+	}
+	if span.X != 72 || span.Width != 451 {
+		t.Errorf("nested spanner bounds=(%g,%g), want full container at x=72 width=451", span.X, span.Width)
+	}
+	if after.Y < span.Y+span.Height {
+		t.Errorf("content after spanner starts at y=%g before its end at %g", after.Y, span.Y+span.Height)
+	}
+}
+
 func TestLayout_ColumnSpanBreakAfterPageStartsFollowingSegmentOnNewPage(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0">BEFORE SPANNER</p><h2 style="column-span:all;margin:0;break-after:page">SPANNER</h2><p style="margin:0">AFTER SPANNER</p></div>`)
 	if err != nil {

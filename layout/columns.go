@@ -35,7 +35,7 @@ type columnRowCursor struct {
 // (the end of the tallest column).
 func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
 	y += c.Style.MarginTop
-	items := nestedContainerItems(c)
+	items := columnItemsContainingSpanners(c)
 	for start := 0; start < len(items); {
 		span := start
 		for span < len(items) && !items[span].Style.ColumnSpanAll {
@@ -55,6 +55,47 @@ func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, b
 		}
 	}
 	return y + c.Style.MarginBottom
+}
+
+func columnItemsContainingSpanners(container *boxes.Box) []*boxes.Box {
+	var items []*boxes.Box
+	for _, item := range nestedContainerItems(container) {
+		if !item.Style.ColumnSpanAll && canUnwrapColumnSpannerPath(item) {
+			items = append(items, columnItemsContainingSpanners(item)...)
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func canUnwrapColumnSpannerPath(box *boxes.Box) bool {
+	if box == nil || box.Style.Display != boxes.DisplayBlock || box.Style.Position != boxes.PositionStatic ||
+		box.Style.Float != boxes.FloatNone || box.Style.Clear != boxes.ClearNone || isMultiColumn(box) ||
+		box.Style.Display == boxes.DisplayFlex || box.Style.Display == boxes.DisplayGrid || isTableFormattingContext(box) ||
+		box.Style.HasBg || box.Style.HasOpacity || clipsOverflow(box) || hasHeightSizing(box) ||
+		!box.Style.Sizing.Width.IsAuto() || !box.Style.Sizing.MinWidth.IsAuto() || !box.Style.Sizing.MaxWidth.IsAuto() ||
+		box.Style.MarginTop != 0 || box.Style.MarginRight != 0 || box.Style.MarginBottom != 0 || box.Style.MarginLeft != 0 ||
+		box.Style.PaddingTop != 0 || box.Style.PaddingRight != 0 || box.Style.PaddingBottom != 0 || box.Style.PaddingLeft != 0 ||
+		box.Style.BorderTop.Width != 0 || box.Style.BorderRight.Width != 0 || box.Style.BorderBottom.Width != 0 || box.Style.BorderLeft.Width != 0 ||
+		box.Style.BreakBefore != boxes.BreakBeforeAuto || box.Style.BreakAfter != boxes.BreakAfterAuto || box.Style.BreakInside != boxes.BreakInsideAuto {
+		return false
+	}
+	for _, child := range nestedContainerItems(box) {
+		if child.Style.ColumnSpanAll || hasDescendantColumnSpanner(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDescendantColumnSpanner(box *boxes.Box) bool {
+	for _, child := range box.Children {
+		if child.Style.ColumnSpanAll || hasDescendantColumnSpanner(child) {
+			return true
+		}
+	}
+	return false
 }
 
 func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64, balance bool) float64 {
