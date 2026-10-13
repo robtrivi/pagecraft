@@ -263,7 +263,11 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 					h = lastLine.y + lastLine.height - yc + it.Style.BorderBottom.Width + it.Style.PaddingBottom
 				}
 				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h}, yc, opts.top(), bottom, pageHasContent, pages, opts)
+				breakBefore := fragmentBreakAuto
+				if lineOffset == 0 {
+					breakBefore = pageBreakValue(it.Style.BreakBefore)
+				}
+				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 				lineShift := fragmentPlan.y - yc
 				yc = fragmentPlan.y
 				pb := placed(it, flexFragmentText(fragment), nil, columnX, yc, colW, h, fs, font)
