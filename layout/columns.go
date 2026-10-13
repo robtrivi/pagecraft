@@ -291,6 +291,15 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				columnLimit := columnLineLimit(y+target, yc, columnFloats, it, opts)
 				count := linesFittingColumn(item, lineOffset, yc, columnLimit, it, opts)
 				left := len(item.lines) - lineOffset
+				if count > 0 && count < left {
+					units := columnTextLineFragmentUnits(item.lines[lineOffset:], it, opts)
+					cut, _, retry := enforceWidowsOrphans(units, 0, count, 0, yc, y, nil)
+					if cut > 0 {
+						count = cut
+					} else if retry && used > 0 {
+						break
+					}
+				}
 				if col == n-1 && count < left && count > 0 {
 					recordColumnShortage(&shortage, columnTextLineOverflow(item, lineOffset, lineOffset+count, yc, columnLimit, it, opts))
 				}
@@ -697,6 +706,19 @@ func linesFittingColumn(item columnItemLayout, first int, y, limit float64, box 
 		lineY += lineHeight
 	}
 	return count
+}
+
+func columnTextLineFragmentUnits(lines []inlineStream, box *boxes.Box, opts Options) []fragmentUnit {
+	units := make([]fragmentUnit, len(lines))
+	for index, line := range lines {
+		units[index] = fragmentUnit{
+			height:  lineHeightW(line, box, opts),
+			group:   1,
+			orphans: box.Style.Orphans,
+			widows:  box.Style.Widows,
+		}
+	}
+	return units
 }
 
 func columnLineLimit(targetEnd, lineY float64, floats []activeFloat, box *boxes.Box, opts Options) float64 {

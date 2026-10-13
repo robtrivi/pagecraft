@@ -526,6 +526,36 @@ func TestLayout_ColumnsContinuesLongTextInNextColumn(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnTextPreservesWidowsAndOrphansAcrossColumns(t *testing.T) {
+	text := "LINE alpha LINE bravo LINE charlie LINE delta LINE echo LINE foxtrot LINE golf LINE hotel LINE india LINE juliet"
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0;font:10pt/10pt Helvetica">INTRODUCTION BLOCK WITH TWO LINES OF TEXT</p><p style="margin:0;font:10pt/10pt Helvetica;orphans:4;widows:4">` + text + `</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 120, 10
+	pages := Flow(root, opts)
+	if len(pages) != 1 {
+		t.Fatalf("pages=%d, want 1", len(pages))
+	}
+	var paragraphFragments []PlacedBox
+	for _, block := range pages[0].Blocks {
+		if strings.HasPrefix(block.Text, "LINE") {
+			paragraphFragments = append(paragraphFragments, block)
+			if len(block.Runs) < 4 {
+				t.Errorf("paragraph fragment has %d lines, want at least 4: %q", len(block.Runs), block.Text)
+			}
+		}
+	}
+	if len(paragraphFragments) != 2 {
+		t.Fatalf("paragraph fragments=%d, want 2 columns", len(paragraphFragments))
+	}
+	joined := strings.Join(strings.Fields(paragraphFragments[0].Text+" "+paragraphFragments[1].Text), " ")
+	if joined != text {
+		t.Errorf("text order must be preserved across columns: got %q, want %q", joined, text)
+	}
+}
+
 func TestLayout_ColumnsContinuesTextBeforeFollowingBlock(t *testing.T) {
 	text := "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty"
 	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0">` + text + `</p><p style="margin:0">end</p></div>`)
