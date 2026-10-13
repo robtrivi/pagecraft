@@ -382,32 +382,38 @@ func placed(src *boxes.Box, text string, img *images.Raster, x, y, w, h, fs floa
 
 // fontFor resolves the box's font family (nil means Helvetica).
 func fontFor(opts Options, b *boxes.Box) *fonts.Face {
-	if b.Style.FontFamily == "" {
-		return nil
+	families := b.Style.FontFamilies
+	if len(families) == 0 && b.Style.FontFamily != "" {
+		families = []string{b.Style.FontFamily}
 	}
-	variants := opts.FontVariants[b.Style.FontFamily]
-	var face *fonts.Face
-	switch {
-	case b.Style.Bold && b.Style.Italic:
-		face = variants.BoldItalic
-		if face == nil {
+	for _, family := range families {
+		variants := opts.FontVariants[family]
+		var face *fonts.Face
+		switch {
+		case b.Style.Bold && b.Style.Italic:
+			face = variants.BoldItalic
+			if face == nil {
+				face = variants.Bold
+			}
+			if face == nil {
+				face = variants.Italic
+			}
+		case b.Style.Bold:
 			face = variants.Bold
-		}
-		if face == nil {
+		case b.Style.Italic:
 			face = variants.Italic
 		}
-	case b.Style.Bold:
-		face = variants.Bold
-	case b.Style.Italic:
-		face = variants.Italic
+		if face == nil {
+			face = variants.Regular
+		}
+		if face == nil {
+			face = opts.Faces[family]
+		}
+		if face != nil {
+			return face
+		}
 	}
-	if face == nil {
-		face = variants.Regular
-	}
-	if face == nil {
-		face = opts.Faces[b.Style.FontFamily]
-	}
-	return face
+	return nil
 }
 
 // measureFor selects the measurer and font: the box font, bold font, or global font.

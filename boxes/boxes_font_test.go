@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -55,6 +56,17 @@ func TestBoxes_FontFace_PreservesWeightVariants(t *testing.T) {
 	}
 	if root.Fonts["Compare"] != v.Regular {
 		t.Fatal("compatible family registry must point to the regular face")
+	}
+}
+
+func TestBoxes_FontFamily_PreservesOrderedFallbacks(t *testing.T) {
+	root, err := Build(`<p style="font-family:'Primary, Display', 'Fallback Sans', sans-serif">x</p>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	want := []string{"Primary, Display", "Fallback Sans", "sans-serif"}
+	if got := root.Children[0].Style.FontFamilies; !reflect.DeepEqual(got, want) {
+		t.Errorf("font family fallback list = %#v, want %#v", got, want)
 	}
 }
 

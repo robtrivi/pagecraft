@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/fonts"
 	"github.com/robtrivi/pagecraft/text"
 )
 
@@ -162,9 +163,12 @@ func TestLayout_RelativeSmallFontKeepsFeeCalloutOnItsMeasuredLine(t *testing.T) 
 func testOptions() Options {
 	return Options{
 		PageWidth: 595, PageHeight: 842, // A4 en pt
-		Margin:   72,
-		FontSize: 12, LineHeight: 1.2,
-		Measure: func(s string, _ float64) float64 { return float64(len([]rune(s)) * 6) },
+		Margin:       72,
+		FontSize:     12,
+		LineHeight:   1.2,
+		Measure:      func(s string, _ float64) float64 { return float64(len([]rune(s)) * 6) },
+		Faces:        map[string]*fonts.Face{},
+		FontVariants: map[string]fonts.Variants{},
 	}
 }
 

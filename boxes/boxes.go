@@ -122,6 +122,9 @@ func BuildWithOptions(htmlStr string, opts Options) (*Box, []string, error) {
 	}
 	root.Style.HasBg, root.Style.Bg = bodyBox.Style.HasBg, bodyBox.Style.Bg
 	root.Children = append(root.Children, bodyBox.Children...)
+	if err := root.loadSystemFonts(); err != nil {
+		return nil, ld.warnings, err
+	}
 	AssignSourcePaths(root)
 	return root, ld.warnings, nil
 }

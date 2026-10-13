@@ -26,7 +26,10 @@ func applyTypographyStyle(b *Box, the *html.Node, decls css.Declarations) {
 		b.Style.Align = "left"
 	}
 	if ff, ok := decls["font-family"]; ok {
-		b.Style.FontFamily = firstFamily(ff)
+		b.Style.FontFamilies = parseFontFamilies(ff)
+		if len(b.Style.FontFamilies) > 0 {
+			b.Style.FontFamily = b.Style.FontFamilies[0]
+		}
 	}
 	if lh, ok := decls["line-height"]; ok {
 		if f, ok := parseLineHeight(lh); ok {

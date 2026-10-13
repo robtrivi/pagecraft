@@ -76,6 +76,7 @@ type ComputedStyle struct {
 	Color                            [4]float64 // RGBA text color, values from 0 to 1
 	Align                            string     // left | center | right | justify
 	FontFamily                       string     // first font-family entry
+	FontFamilies                     []string   // ordered CSS font-family fallback list
 	Bold                             bool
 	Italic                           bool
 	Underline                        bool

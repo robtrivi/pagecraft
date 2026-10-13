@@ -33,6 +33,24 @@ func TestRender_CustomFont_EmbedsSubset(t *testing.T) {
 	}
 }
 
+func TestRender_InstalledFontFamily_UsesRequestedFace(t *testing.T) {
+	fontPath := "/usr/share/fonts/liberation/LiberationSans-Bold.ttf"
+	if _, err := os.Stat(fontPath); err != nil {
+		t.Skip("Liberation Sans Bold is not installed")
+	}
+
+	pdf, err := RenderHTMLToPDF(`<p style="margin:0;font: bold 32pt/0.95 'Liberation Sans',sans-serif">Factura</p>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	if !bytes.Contains(pdf, []byte("/FontFile2")) {
+		t.Fatal("the requested installed font was not embedded; rendering fell back to a base-14 font")
+	}
+	if !bytes.Contains(pdf, []byte("LiberationSansBold")) {
+		t.Fatal("bold text did not select the installed bold face")
+	}
+}
+
 func TestRender_CustomFontInNestedBlocksRegistersEveryRunFont(t *testing.T) {
 	system := customSystemTTF(t)
 	tmp := filepath.Join(t.TempDir(), "nested.ttf")

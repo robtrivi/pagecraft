@@ -251,18 +251,36 @@ func transformText(s, mode string) string {
 	}
 }
 
-// firstFamily returns the first family name, without quotes or surrounding spaces.
-func firstFamily(s string) string {
-	if i := strings.Index(s, ","); i >= 0 {
-		s = s[:i]
-	}
-	s = strings.TrimSpace(s)
-	if len(s) >= 2 {
-		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
-			s = s[1 : len(s)-1]
+func parseFontFamilies(s string) []string {
+	var families []string
+	var current strings.Builder
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			} else {
+				current.WriteByte(c)
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"':
+			quote = c
+		case ',':
+			if family := strings.TrimSpace(current.String()); family != "" {
+				families = append(families, family)
+			}
+			current.Reset()
+		default:
+			current.WriteByte(c)
 		}
 	}
-	return strings.TrimSpace(s)
+	if family := strings.TrimSpace(current.String()); family != "" {
+		families = append(families, family)
+	}
+	return families
 }
 
 // splitDataURI splits "data:<meta>,<payload>".
