@@ -89,6 +89,48 @@ func TestBoxes_UA_TableHeaderIsBold(t *testing.T) {
 	}
 }
 
+func TestBoxes_UA_TableCellsHaveOnePixelPaddingAndAllowOverride(t *testing.T) {
+	root, err := Build(`<table><tr><td>default</td><th>header</th><td style="padding:0">reset</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	cells := root.Children[0].Children[0].Children[0].Children
+	for _, cell := range cells[:2] {
+		if cell.Style.PaddingTop != 0.75 || cell.Style.PaddingRight != 0.75 || cell.Style.PaddingBottom != 0.75 || cell.Style.PaddingLeft != 0.75 {
+			t.Errorf("cell %s default padding=%g/%g/%g/%gpt, want 0.75pt on every side", cell.Tag,
+				cell.Style.PaddingTop, cell.Style.PaddingRight, cell.Style.PaddingBottom, cell.Style.PaddingLeft)
+		}
+	}
+	reset := cells[2]
+	if reset.Style.PaddingTop != 0 || reset.Style.PaddingRight != 0 || reset.Style.PaddingBottom != 0 || reset.Style.PaddingLeft != 0 {
+		t.Errorf("author padding:0 did not override UA padding: %+v", reset.Style)
+	}
+}
+
+func TestBoxes_TableCellPaddingComesFromContainingTable(t *testing.T) {
+	root, err := Build(`<table cellpadding="4"><tr><td>table padding</td><td style="padding:2px">author override</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	cells := root.Children[0].Children[0].Children[0].Children
+	for side, got := range map[string]float64{
+		"top": cells[0].Style.PaddingTop, "right": cells[0].Style.PaddingRight,
+		"bottom": cells[0].Style.PaddingBottom, "left": cells[0].Style.PaddingLeft,
+	} {
+		if got != 3 {
+			t.Errorf("table cellpadding=4 gives %s padding %gpt, want 3pt", side, got)
+		}
+	}
+	for side, got := range map[string]float64{
+		"top": cells[1].Style.PaddingTop, "right": cells[1].Style.PaddingRight,
+		"bottom": cells[1].Style.PaddingBottom, "left": cells[1].Style.PaddingLeft,
+	} {
+		if got != 1.5 {
+			t.Errorf("author padding overrides table cellpadding on %s: got %gpt, want 1.5pt", side, got)
+		}
+	}
+}
+
 func TestBoxes_UA_BodyMarginCanBeReset(t *testing.T) {
 	withDefault, err := Build(`<html><body><p>text</p></body></html>`)
 	if err != nil {

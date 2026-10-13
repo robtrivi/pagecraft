@@ -17,6 +17,9 @@ func resolveBoxDeclarations(the *html.Node, inherited css.Declarations, ss *styl
 			decls[k] = v
 		}
 	}
+	for k, v := range tableCellPresentationStyle(the) {
+		decls[k] = v
+	}
 	hasCascadedFontWeight := false
 	if ss != nil {
 		cascaded := ss.cascaded(the)
@@ -36,6 +39,28 @@ func resolveBoxDeclarations(the *html.Node, inherited css.Declarations, ss *styl
 		decls["font-size"] = resolveRelativeFontSize(fontSize, inherited)
 	}
 	return decls
+}
+
+// tableCellPresentationStyle models the table element's default cellpadding
+// as a low-priority HTML presentation style for its cells. Author CSS is
+// applied afterward and can override it.
+func tableCellPresentationStyle(the *html.Node) css.Declarations {
+	if the == nil || the.Type != html.ElementNode || the.Data != "td" && the.Data != "th" {
+		return nil
+	}
+	padding := 1
+	for ancestor := the.Parent; ancestor != nil; ancestor = ancestor.Parent {
+		if ancestor.Type != html.ElementNode || ancestor.Data != "table" {
+			continue
+		}
+		if value := elementAttribute(ancestor, "cellpadding"); value != "" {
+			if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && parsed >= 0 {
+				padding = parsed
+			}
+		}
+		break
+	}
+	return css.Declarations{"padding": strconv.Itoa(padding) + "px"}
 }
 
 func resolveRelativeFontSize(value string, inherited css.Declarations) string {
@@ -75,6 +100,8 @@ func newElementBox(the *html.Node) *Box {
 	b := &Box{Tag: the.Data, Style: ComputedStyle{Display: defaultDisplay(the.Data), Position: PositionStatic, Float: FloatNone}}
 	// HTML presentational defaults; CSS declarations are applied afterward.
 	switch the.Data {
+	case "table":
+		b.Style.TableBorderSpacingX, b.Style.TableBorderSpacingY = 1.5, 1.5
 	case "b", "strong":
 		b.Style.Bold = true
 	case "i", "em":
