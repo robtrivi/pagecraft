@@ -25,11 +25,18 @@ func fragmentTableRow(done []tableDoneCell, y, pageTop, pageBottom float64, brea
 	if !hasLines {
 		return y
 	}
+	spacingY := 0.0
+	if !collapsed && len(done) > 0 && done[0].table != nil {
+		spacingY = done[0].table.Style.TableBorderSpacingY
+	}
 	repeatAtStart := false
 	if breakBefore == fragmentBreakPage {
 		pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 		forced := placeFragmentUnitForPage(fragmentUnit{breakBefore: breakBefore}, y, pageTop, pageBottom, pageHasContent, pages, opts)
 		y = forced.y
+		if forced.pageOffset > 0 {
+			y += spacingY
+		}
 		repeatAtStart = forced.pageOffset > 0
 	}
 	firstRowFragment := true
@@ -38,10 +45,11 @@ func fragmentTableRow(done []tableDoneCell, y, pageTop, pageBottom float64, brea
 	for {
 		pageIndex := len(*pages) - 1
 		if pageIndex > startPage || repeatAtStart {
-			y = pageTop
+			y = pageTop + spacingY
 			if repeatHeaders {
 				for index, header := range repeatedHeaders {
 					y = placeTableRowCells(header, fullTableCellRanges(header), repeatedHeaderHeights[index], y, true, true, pages, opts, colWidths, collapsed, true, false)
+					y += spacingY
 				}
 			}
 			repeatAtStart = false
@@ -226,13 +234,18 @@ func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowH
 	for _, width := range colWidths {
 		tableWidth += width
 	}
+	spacingX := 0.0
+	if !collapsed {
+		spacingX = cells[0].table.Style.TableBorderSpacingX
+		tableWidth += spacingX * float64(len(colWidths)+1)
+	}
 	collapsedBorders := resolveCollapsedRowBorders(cells)
 	for index, cell := range cells {
 		lines := cell.lines[ranges[index].first:ranges[index].end]
 		style := fragmentBox(cell.b, firstFragment, lastFragment)
-		x := opts.left()
+		x := opts.left() + spacingX
 		for column := 0; column < cell.col && column < len(colWidths); column++ {
-			x += colWidths[column]
+			x += colWidths[column] + spacingX
 		}
 		width := 0.0
 		for column := cell.col; column < cell.col+cell.span && column < len(colWidths); column++ {

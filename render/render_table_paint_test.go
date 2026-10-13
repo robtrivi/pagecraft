@@ -92,6 +92,18 @@ func TestRender_CollapsedTableRowBorderPaintsAcrossCells(t *testing.T) {
 	}
 }
 
+func TestRender_CollapsedTableOuterBorderKeepsFullThickness(t *testing.T) {
+	html := `<style>@page{size:200pt 100pt;margin:0}body{margin:0}table{width:100pt;border-collapse:collapse;border-bottom:1pt solid red}td{padding:0}</style><table><tr><td>LEFT</td><td>RIGHT</td></tr></table>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	if !regexp.MustCompile(`1 0 0 rg [0-9.]+ [0-9.]+ [0-9.]+ 1 re f`).MatchString(content) {
+		t.Fatalf("collapsed outer border is not painted at its full 1pt thickness; content stream:\n%s", content)
+	}
+}
+
 func TestRender_RepeatedHeaderKeepsItsPaintLayers(t *testing.T) {
 	var body strings.Builder
 	body.WriteString(`<table style="margin:0"><thead style="background:#163b64;color:white"><tr><th>REPEATED HEADER</th></tr></thead><tbody>`)

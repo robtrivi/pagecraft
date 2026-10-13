@@ -12,9 +12,9 @@ func TestLayout_TableAutoMarginsAlignDeclaredWidth(t *testing.T) {
 		name, margins string
 		wantX         float64
 	}{
-		{name: "left auto aligns right", margins: "margin-left:auto", wantX: 423},
-		{name: "right auto stays left", margins: "margin-right:auto", wantX: 72},
-		{name: "both auto center", margins: "margin-left:auto;margin-right:auto", wantX: 247.5},
+		{name: "left auto aligns right", margins: "margin-left:auto", wantX: 424.5},
+		{name: "right auto stays left", margins: "margin-right:auto", wantX: 73.5},
+		{name: "both auto center", margins: "margin-left:auto;margin-right:auto", wantX: 249},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root, err := boxes.Build(`<table style="width:100pt;` + tc.margins + `"><tr><td>total</td></tr></table>`)

@@ -6,8 +6,8 @@ import (
 	"github.com/robtrivi/pagecraft/boxes"
 )
 
-// Percent widths should partition the declared table width in the requested
-// ratio, and the same column geometry should be used for every row.
+// Percent widths should partition the table's track area after separate-mode
+// border spacing, preserving the requested ratio across every row.
 func TestLayout_TablePercentWidthsPreserveRatiosAcrossRows(t *testing.T) {
 	for _, tc := range []struct {
 		name                          string
@@ -29,8 +29,9 @@ func TestLayout_TablePercentWidthsPreserveRatiosAcrossRows(t *testing.T) {
 				t.Fatalf("blocks: got %d, want 4", len(blocks))
 			}
 			first, second := blocks[0].Width, blocks[1].Width
-			if !approx(first+second, tc.width) {
-				t.Errorf("columns occupy %gpt, want declared table width %gpt", first+second, tc.width)
+			trackWidth := tc.width - 4.5 // 2px spacing at both edges and between two columns.
+			if !approx(first+second, trackWidth) {
+				t.Errorf("columns occupy %gpt, want table track width %gpt after border spacing", first+second, trackWidth)
 			}
 			if !approx(first*tc.second, second*tc.firstPercent) {
 				t.Errorf("column widths %g:%g do not match requested ratio %g:%g", first, second, tc.firstPercent, tc.second)

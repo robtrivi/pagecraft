@@ -18,11 +18,11 @@ func TestLayout_TableColspan_SpansColumns(t *testing.T) {
 	if len(blocks) != 3 {
 		t.Fatalf("blocks: got %d, want 3", len(blocks))
 	}
-	if blocks[0].X != 72 || blocks[0].Width != 451 {
-		t.Errorf("span: got X=%v W=%v, want 72 451", blocks[0].X, blocks[0].Width)
+	if blocks[0].X != 73.5 || blocks[0].Width != 446.5 {
+		t.Errorf("span: got X=%v W=%v, want 73.5 446.5 after browser-default spacing", blocks[0].X, blocks[0].Width)
 	}
-	if blocks[1].X != 72 || blocks[2].X != 297.5 {
-		t.Errorf("row 2: got %v %v, want 72 297.5", blocks[1].X, blocks[2].X)
+	if blocks[1].X != 73.5 || blocks[2].X != 298.25 {
+		t.Errorf("row 2: got %v %v, want 73.5 298.25", blocks[1].X, blocks[2].X)
 	}
 }
 
@@ -36,8 +36,8 @@ func TestLayout_TableRowspan_ReservesRows(t *testing.T) {
 		t.Fatalf("blocks: got %d, want 3", len(blocks))
 	}
 	// C is placed in column 1 (To occupies column 0).
-	if blocks[2].X != 297.5 {
-		t.Errorf("C: got X=%v, want 297.5", blocks[2].X)
+	if blocks[2].X != 298.25 {
+		t.Errorf("C: got X=%v, want 298.25", blocks[2].X)
 	}
 	if blocks[2].Y <= blocks[0].Y {
 		t.Errorf("C must be in row 2: got %v after %v", blocks[2].Y, blocks[0].Y)

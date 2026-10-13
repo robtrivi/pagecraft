@@ -30,6 +30,8 @@ type tableDoneCell struct {
 	group                 *boxes.Box
 	tableFirst, tableLast bool
 	groupFirst, groupLast bool
+	collapsedBorders      collapsedTableCellBorders
+	borderModelReady      bool
 }
 
 type tableSpanningCell struct {
@@ -67,13 +69,14 @@ func tableCellBorderInsets(cell *boxes.Box, collapsed bool) (top, right, bottom,
 }
 
 type collapsedTableCellBorders struct {
-	top, right, bottom, left boxes.BorderSide
+	top, right, bottom, left                                     boxes.BorderSide
+	skipTopPaint, skipRightPaint, skipBottomPaint, skipLeftPaint bool
 }
 
 // collapsedCellBorderCandidates collects the borders that can contribute to
 // one cell's grid edges. Row, group, and table vertical borders only apply at
 // the outside of the row; their horizontal borders span every cell.
-func collapsedCellBorderCandidates(cell, row, group, table *boxes.Box, firstCell, lastCell bool) collapsedTableCellBorders {
+func collapsedCellBorderCandidates(cell, row, group, table *boxes.Box, firstCell, lastCell, tableFirst, tableLast, groupFirst, groupLast bool, columnLeft, columnRight []boxes.BorderSide) collapsedTableCellBorders {
 	style := func(box *boxes.Box) boxes.ComputedStyle {
 		if box == nil {
 			return boxes.ComputedStyle{}
@@ -84,31 +87,96 @@ func collapsedCellBorderCandidates(cell, row, group, table *boxes.Box, firstCell
 	resolve := func(sides ...boxes.BorderSide) boxes.BorderSide {
 		winner := boxes.BorderSide{}
 		for _, side := range sides {
-			if side.Width > winner.Width {
+			if collapsedBorderBeats(side, winner) {
 				winner = side
 			}
 		}
 		return winner
 	}
 	result := collapsedTableCellBorders{
-		top:    resolve(cellStyle.BorderTop, rowStyle.BorderTop, groupStyle.BorderTop, tableStyle.BorderTop),
-		right:  resolve(cellStyle.BorderRight),
-		bottom: resolve(cellStyle.BorderBottom, rowStyle.BorderBottom, groupStyle.BorderBottom, tableStyle.BorderBottom),
-		left:   resolve(cellStyle.BorderLeft),
+		top:    resolve(cellStyle.BorderTop, rowStyle.BorderTop),
+		bottom: resolve(cellStyle.BorderBottom, rowStyle.BorderBottom),
 	}
+	if groupFirst {
+		result.top = resolve(result.top, groupStyle.BorderTop)
+	}
+	if groupLast {
+		result.bottom = resolve(result.bottom, groupStyle.BorderBottom)
+	}
+	if tableFirst {
+		result.top = resolve(result.top, tableStyle.BorderTop)
+	}
+	if tableLast {
+		result.bottom = resolve(result.bottom, tableStyle.BorderBottom)
+	}
+	rightCandidates := []boxes.BorderSide{cellStyle.BorderRight}
+	leftCandidates := []boxes.BorderSide{cellStyle.BorderLeft}
 	if lastCell {
-		result.right = resolve(cellStyle.BorderRight, rowStyle.BorderRight, groupStyle.BorderRight, tableStyle.BorderRight)
+		rightCandidates = append(rightCandidates, rowStyle.BorderRight, groupStyle.BorderRight)
 	}
 	if firstCell {
-		result.left = resolve(cellStyle.BorderLeft, rowStyle.BorderLeft, groupStyle.BorderLeft, tableStyle.BorderLeft)
+		leftCandidates = append(leftCandidates, rowStyle.BorderLeft, groupStyle.BorderLeft)
 	}
+	// Blink resolves column groups before columns, then applies table borders
+	// last. Keep the source order here so equal width and style ties follow that
+	// origin precedence.
+	rightCandidates = append(rightCandidates, columnRight...)
+	leftCandidates = append(leftCandidates, columnLeft...)
+	if lastCell {
+		rightCandidates = append(rightCandidates, tableStyle.BorderRight)
+	}
+	if firstCell {
+		leftCandidates = append(leftCandidates, tableStyle.BorderLeft)
+	}
+	result.right = resolve(rightCandidates...)
+	result.left = resolve(leftCandidates...)
 	return result
+}
+
+func collapsedBorderBeats(candidate, current boxes.BorderSide) bool {
+	if candidate.Style == "hidden" {
+		return current.Style != "hidden"
+	}
+	if current.Style == "hidden" {
+		return false
+	}
+	if candidate.Width != current.Width {
+		return candidate.Width > current.Width
+	}
+	styleRank := func(style string) int {
+		switch style {
+		case "double":
+			return 8
+		case "solid":
+			return 7
+		case "dashed":
+			return 6
+		case "dotted":
+			return 5
+		case "ridge":
+			return 4
+		case "outset":
+			return 3
+		case "groove":
+			return 2
+		case "inset":
+			return 1
+		default:
+			return 0
+		}
+	}
+	return styleRank(candidate.Style) > styleRank(current.Style)
 }
 
 func resolveCollapsedRowBorders(cells []tableDoneCell) []collapsedTableCellBorders {
 	resolved := make([]collapsedTableCellBorders, len(cells))
 	for index, cell := range cells {
-		resolved[index] = collapsedCellBorderCandidates(cell.b, cell.row, cell.group, cell.table, index == 0, index == len(cells)-1)
+		if cell.borderModelReady {
+			resolved[index] = cell.collapsedBorders
+		} else {
+			resolved[index] = collapsedCellBorderCandidates(cell.b, cell.row, cell.group, cell.table,
+				index == 0, index == len(cells)-1, cell.tableFirst, cell.tableLast, cell.groupFirst, cell.groupLast, nil, nil)
+		}
 	}
 	for index := 1; index < len(cells); index++ {
 		left, right := cells[index-1], cells[index]
@@ -116,23 +184,203 @@ func resolveCollapsedRowBorders(cells []tableDoneCell) []collapsedTableCellBorde
 			continue
 		}
 		winner := resolved[index-1].right
-		if resolved[index].left.Width > winner.Width {
+		if collapsedBorderBeats(resolved[index].left, winner) {
 			winner = resolved[index].left
 		}
 		resolved[index-1].right, resolved[index].left = winner, winner
-	}
-	for index := range resolved {
-		resolved[index].top.Width *= 0.5
-		resolved[index].right.Width *= 0.5
-		resolved[index].bottom.Width *= 0.5
-		resolved[index].left.Width *= 0.5
+		resolved[index].skipLeftPaint = true
 	}
 	return resolved
 }
 
+type tableColumnBorderSources struct {
+	column, group        *boxes.Box
+	groupStart, groupEnd bool
+}
+
+func tableColumnBorders(table *boxes.Box, cols int) []tableColumnBorderSources {
+	sources := make([]tableColumnBorderSources, cols)
+	column := 0
+	for _, child := range table.Children {
+		if child.Tag != "col" && child.Tag != "colgroup" {
+			continue
+		}
+		if child.Tag == "colgroup" && len(child.Children) > 0 {
+			start := column
+			for _, col := range child.Children {
+				if col.Tag != "col" {
+					continue
+				}
+				span := max(1, col.Style.TableColumnSpan)
+				for track := 0; track < span && column < cols; track++ {
+					sources[column] = tableColumnBorderSources{column: col, group: child}
+					column++
+				}
+			}
+			end := column - 1
+			if start < cols && end >= start {
+				sources[start].groupStart = true
+				sources[end].groupEnd = true
+			}
+			continue
+		}
+		span := max(1, child.Style.TableColumnSpan)
+		start := column
+		for track := 0; track < span && column < cols; track++ {
+			if child.Tag == "colgroup" {
+				sources[column] = tableColumnBorderSources{group: child}
+			} else {
+				sources[column] = tableColumnBorderSources{column: child}
+			}
+			column++
+		}
+		end := column - 1
+		if child.Tag == "colgroup" && start < cols && end >= start {
+			sources[start].groupStart = true
+			sources[end].groupEnd = true
+		}
+	}
+	return sources
+}
+
+func tableCellColumnBorderCandidates(sources []tableColumnBorderSources, start, span int) (left, right []boxes.BorderSide) {
+	if start >= len(sources) || span <= 0 {
+		return nil, nil
+	}
+	end := min(len(sources)-1, start+span-1)
+	currentStart, currentEnd := sources[start], sources[end]
+	if currentStart.groupStart && currentStart.group != nil {
+		left = append(left, currentStart.group.Style.BorderLeft)
+	}
+	if start > 0 {
+		previous := sources[start-1]
+		if previous.groupEnd && previous.group != nil {
+			left = append(left, previous.group.Style.BorderRight)
+		}
+	}
+	if currentStart.column != nil {
+		left = append(left, currentStart.column.Style.BorderLeft)
+	}
+	if start > 0 && sources[start-1].column != nil {
+		left = append(left, sources[start-1].column.Style.BorderRight)
+	}
+	if currentEnd.groupEnd && currentEnd.group != nil {
+		right = append(right, currentEnd.group.Style.BorderRight)
+	}
+	if end+1 < len(sources) {
+		next := sources[end+1]
+		if next.groupStart && next.group != nil {
+			right = append(right, next.group.Style.BorderLeft)
+		}
+	}
+	if currentEnd.column != nil {
+		right = append(right, currentEnd.column.Style.BorderRight)
+	}
+	if end+1 < len(sources) && sources[end+1].column != nil {
+		right = append(right, sources[end+1].column.Style.BorderLeft)
+	}
+	return left, right
+}
+
+// collapsedTableBorderModel resolves each shared grid edge once and stores the
+// winner on both cells that meet at the edge. Keeping this model at table scope
+// avoids painting independent borders from adjacent rows over one another.
+func collapsedTableBorderModel(table *boxes.Box, rows []*boxes.Box, grid [][]tableCell, cols int) map[*boxes.Box]collapsedTableCellBorders {
+	columnBorders := tableColumnBorders(table, cols)
+	borderRows := make([][]tableDoneCell, len(grid))
+	occupied := make([][]bool, len(grid))
+	for row := range occupied {
+		occupied[row] = make([]bool, cols)
+	}
+	for rowIndex, row := range grid {
+		column := 0
+		for _, cell := range row {
+			for column < cols && occupied[rowIndex][column] {
+				column++
+			}
+			if column >= cols {
+				break
+			}
+			span := min(max(1, cell.span), cols-column)
+			group := tableRowGroup(cell.row)
+			done := tableDoneCell{
+				b: cell.b, col: column, span: span, rowSpan: max(1, cell.b.Style.RowSpan),
+				table: table, row: cell.row, group: group,
+				tableFirst: rowIndex == 0, tableLast: rowIndex == len(grid)-1,
+				groupFirst: rowIndex == 0 || tableRowGroup(rows[rowIndex-1]) != group,
+				groupLast:  rowIndex == len(grid)-1 || tableRowGroup(rows[rowIndex+1]) != group,
+			}
+			columnLeft, columnRight := tableCellColumnBorderCandidates(columnBorders, column, span)
+			done.collapsedBorders = collapsedCellBorderCandidates(cell.b, cell.row, group, table,
+				column == 0, column+span == cols, done.tableFirst, done.tableLast, done.groupFirst, done.groupLast, columnLeft, columnRight)
+			done.borderModelReady = true
+			borderRows[rowIndex] = append(borderRows[rowIndex], done)
+			endRow := min(len(grid), rowIndex+done.rowSpan)
+			for coveredRow := rowIndex; coveredRow < endRow; coveredRow++ {
+				for coveredColumn := column; coveredColumn < column+span; coveredColumn++ {
+					occupied[coveredRow][coveredColumn] = true
+				}
+			}
+			column += span
+		}
+	}
+
+	resolvedRows := make([][]collapsedTableCellBorders, len(borderRows))
+	for rowIndex, cells := range borderRows {
+		resolvedRows[rowIndex] = resolveCollapsedRowBorders(cells)
+	}
+	for rowIndex := 0; rowIndex+1 < len(borderRows); rowIndex++ {
+		for upperIndex := range borderRows[rowIndex] {
+			upper := &borderRows[rowIndex][upperIndex]
+			if upper.rowSpan != 1 {
+				continue
+			}
+			for lowerIndex := range borderRows[rowIndex+1] {
+				lower := &borderRows[rowIndex+1][lowerIndex]
+				if upper.col >= lower.col+lower.span || lower.col >= upper.col+upper.span {
+					continue
+				}
+				upperBorder := resolvedRows[rowIndex][upperIndex].bottom
+				lowerBorder := resolvedRows[rowIndex+1][lowerIndex].top
+				winner := upperBorder
+				if collapsedBorderBeats(lowerBorder, winner) {
+					winner = lowerBorder
+				}
+				resolvedRows[rowIndex][upperIndex].bottom = winner
+				resolvedRows[rowIndex+1][lowerIndex].top = winner
+				resolvedRows[rowIndex+1][lowerIndex].skipTopPaint = true
+			}
+		}
+	}
+
+	resolved := make(map[*boxes.Box]collapsedTableCellBorders)
+	for rowIndex, cells := range borderRows {
+		for cellIndex, cell := range cells {
+			resolved[cell.b] = resolvedRows[rowIndex][cellIndex]
+		}
+	}
+	return resolved
+}
+
+func collapsedRowHeight(cells []tableDoneCell, opts Options) float64 {
+	borders := resolveCollapsedRowBorders(cells)
+	height := 0.0
+	for index, cell := range cells {
+		top := borders[index].top.Width * 0.5
+		bottom := borders[index].bottom.Width * 0.5
+		cellHeight := tableCellAllContentHeight(cell, opts) + cell.b.Style.PaddingTop + cell.b.Style.PaddingBottom + top + bottom
+		height = max(height, cellHeight)
+	}
+	return height
+}
+
 func applyCollapsedCellBorders(block *PlacedBox, borders collapsedTableCellBorders) {
 	block.BorderWidth = 0
+	block.CollapsedTableCell = true
 	block.BorderTop, block.BorderRight, block.BorderBottom, block.BorderLeft = borders.top, borders.right, borders.bottom, borders.left
+	block.CollapsedBorderPaintSuppressed = [4]bool{
+		borders.skipTopPaint, borders.skipRightPaint, borders.skipBottomPaint, borders.skipLeftPaint,
+	}
 }
 
 // flowTable lays out t's rows from and and returns the resulting cursor.
@@ -144,13 +392,28 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 	if cols == 0 {
 		return y
 	}
+	collapsedBorderModel := map[*boxes.Box]collapsedTableCellBorders(nil)
+	if t.Style.BorderCollapse {
+		collapsedBorderModel = collapsedTableBorderModel(t, rows, grid, cols)
+	}
 	tableWidth := tableUsedWidth(t, grid, cols, usable, opts)
 	t = resolveHorizontalAutoMarginsWithWidth(t, usable, tableWidth)
-	colW := columnWidths(grid, cols, tableWidth, opts)
+	hSpacing, vSpacing := 0.0, 0.0
+	if !t.Style.BorderCollapse {
+		hSpacing, vSpacing = t.Style.TableBorderSpacingX, t.Style.TableBorderSpacingY
+	}
+	trackWidth := max(0, tableWidth-hSpacing*float64(cols+1))
+	var colW []float64
+	if t.Style.TableLayoutFixed && t.Style.Sizing.Width.Kind != boxes.DimensionAuto {
+		colW = fixedTableColumnWidths(t, grid, cols, trackWidth)
+	} else {
+		colW = columnWidthsForTable(t, grid, cols, trackWidth, opts)
+	}
 	tableX := opts.left() + t.Style.MarginLeft
 	colX := make([]float64, cols+1)
+	colX[0] = hSpacing
 	for i := 0; i < cols; i++ {
-		colX[i+1] = colX[i] + colW[i]
+		colX[i+1] = colX[i] + colW[i] + hSpacing
 	}
 	cellW := func(col, span int) float64 {
 		w := 0.0
@@ -173,6 +436,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 		opts.tableOpacityCache = make(map[*boxes.Box]OpacityGroup)
 	}
 	canRepeat := len(head) > 0
+	y += vSpacing
 	placeCells := func(done []tableDoneCell, rh, y float64, repeated bool) float64 {
 		p := &(*pages)[len(*pages)-1]
 		collapsedBorders := resolveCollapsedRowBorders(done)
@@ -185,6 +449,10 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			applyTablePaint(&pb, d, tableX, tableWidth, y, rh, true, true, repeated, cellIndex == 0, cellIndex == len(done)-1, t.Style.BorderCollapse, opts)
 			contentH := tableCellAllContentHeight(d, opts) + d.b.Style.PaddingTop + d.b.Style.PaddingBottom
 			borderTop, _, borderBottom, borderLeft := tableCellBorderInsets(d.b, t.Style.BorderCollapse)
+			if t.Style.BorderCollapse {
+				borderTop = collapsedBorders[cellIndex].top.Width * 0.5
+				borderBottom = collapsedBorders[cellIndex].bottom.Width * 0.5
+			}
 			contentBoxH := rh - borderTop - borderBottom
 			offset := 0.0
 			if d.rowSpan <= 1 {
@@ -260,6 +528,10 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 				groupFirst: ri == 0 || tableRowGroup(rows[ri-1]) != group,
 				groupLast:  ri == len(grid)-1 || tableRowGroup(rows[ri+1]) != group,
 			}
+			if t.Style.BorderCollapse {
+				doneCell.collapsedBorders = collapsedBorderModel[rc.b]
+				doneCell.borderModelReady = true
+			}
 			if h := tableCellAllContentHeight(doneCell, opts) + rc.b.Style.PaddingTop + rc.b.Style.PaddingBottom + borderTop + borderBottom; h > rh {
 				rh = h
 			}
@@ -270,6 +542,9 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			doneCell.rowSpan = rowSpan
 			done = append(done, doneCell)
 			col += span
+		}
+		if t.Style.BorderCollapse {
+			rh = collapsedRowHeight(done, opts)
 		}
 		isHead := ri < headCount
 		if isHead {
@@ -287,7 +562,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 		for _, cell := range done {
 			rowHasSpan = rowHasSpan || cell.rowSpan > 1
 		}
-		rowCanSplit := maxTableCellLines(done) > 0 && rh > bottom-opts.top()-repeatHeaderHeight+fragmentEpsilon
+		rowCanSplit := maxTableCellLines(done) > 0 && rh > bottom-opts.top()-repeatHeaderHeight-vSpacing+fragmentEpsilon
 		if rowCanSplit {
 			var activeSpans []*tableSpanningCell
 			for _, span := range spanning {
@@ -297,6 +572,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			}
 			y = fragmentTableRow(done, y, opts.top(), bottom, rowBreakBefore, pages, opts, colW, t.Style.BorderCollapse, headDone, headRh, repeatHeaders, activeSpans, ri, &spanning, !rowHasSpan && len(activeSpans) == 0)
 			spanning = finalizeTableSpanningRows(spanning, ri, pages, t.Style.BorderCollapse)
+			y += vSpacing
 			continue
 		}
 		rowUnit := fragmentUnit{height: rh}
@@ -304,14 +580,14 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 		pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 		rowFragment := placeFragmentUnitForPage(rowUnit, y, opts.top(), bottom, pageHasContent, pages, opts)
 		if rowFragment.pageOffset > 0 {
-			y = rowFragment.y
+			y = rowFragment.y + vSpacing
 			// Repeat headers when a new table page starts.
 			if repeatHeaders && repeatHeaderHeight <= bottom-opts.top()+fragmentEpsilon {
 				for hi := range headDone {
 					if y+headRh[hi] > bottom {
 						break
 					}
-					y = placeCells(headDone[hi], headRh[hi], y, true)
+					y = placeCells(headDone[hi], headRh[hi], y, true) + vSpacing
 				}
 			}
 		}
@@ -322,7 +598,8 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			}
 		}
 		rowY := y
-		y = placeCells(done, rh, y, false)
+		y = placeCells(done, rh, rowY, false)
+		y += vSpacing
 		if len(activeSpans) > 0 {
 			pageIndex := len(*pages) - 1
 			extendTableSpanFragments(activeSpans, pageIndex, ri, rowY, rh, true, pages)
@@ -343,7 +620,25 @@ func tableUsedWidth(table *boxes.Box, grid [][]tableCell, cols int, available fl
 		}
 	} else {
 		minimum, maximum := tableIntrinsicWidths(grid, cols, opts)
+		intrinsic := tableIntrinsicColumns(grid, cols, opts)
+		for index, constraint := range tableColumnDeclaredConstraints(table, grid, cols) {
+			if constraint.IsLength() {
+				maximum += max(0, constraint.Value-intrinsic[index].max)
+			}
+		}
+		if !table.Style.BorderCollapse {
+			spacing := table.Style.TableBorderSpacingX * float64(cols+1)
+			minimum += spacing
+			maximum += spacing
+		}
 		width = max(minimum, min(maximum, available))
+	}
+	if table.Style.TableLayoutFixed && table.Style.Sizing.Width.Kind != boxes.DimensionAuto {
+		minimum := fixedTableColumnMinimumWidth(table, grid, cols)
+		if !table.Style.BorderCollapse {
+			minimum += table.Style.TableBorderSpacingX * float64(cols+1)
+		}
+		width = max(width, minimum)
 	}
 	return clampUsedDimension(width, table.Style.Sizing.MinWidth, table.Style.Sizing.MaxWidth, basis, 0, table.Style.BoxSizing)
 }
@@ -383,6 +678,7 @@ func alignTableSpanContent(span *tableSpanningCell, placedCell *PlacedBox, colla
 // tableRows returns direct <tr> elements and rows inside thead/tbody/tfoot
 // (the HTML parser inserts tbody even when it is absent from the source).
 func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
+	var foot []*boxes.Box
 	for _, c := range t.Children {
 		switch c.Tag {
 		case "tr":
@@ -393,15 +689,21 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 					head = append(head, r)
 				}
 			}
-		case "tbody", "tfoot":
+		case "tbody":
 			for _, r := range c.Children {
 				if r.Tag == "tr" {
 					body = append(body, r)
 				}
 			}
+		case "tfoot":
+			for _, r := range c.Children {
+				if r.Tag == "tr" {
+					foot = append(foot, r)
+				}
+			}
 		}
 	}
-	return head, body
+	return head, append(body, foot...)
 }
 
 func tableCells(r *boxes.Box) []*boxes.Box {

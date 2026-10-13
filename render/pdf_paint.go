@@ -674,11 +674,27 @@ func drawSideBorders(sb *strings.Builder, b layout.PlacedBox, pageH float64, gs 
 		w, x, y, wdt, hgt float64
 		c                 [4]float64
 	}
-	segs := []seg{
-		{b.BorderTop.Width, x0, yTop - b.BorderTop.Width, b.Width, b.BorderTop.Width, b.BorderTop.Color},
-		{b.BorderBottom.Width, x0, yBot, b.Width, b.BorderBottom.Width, b.BorderBottom.Color},
-		{b.BorderLeft.Width, x0, yBot, b.BorderLeft.Width, b.Height, b.BorderLeft.Color},
-		{b.BorderRight.Width, x0 + b.Width - b.BorderRight.Width, yBot, b.BorderRight.Width, b.Height, b.BorderRight.Color},
+	var segs []seg
+	if b.CollapsedTableCell {
+		if !b.CollapsedBorderPaintSuppressed[0] {
+			segs = append(segs, seg{b.BorderTop.Width, x0, yTop - b.BorderTop.Width/2, b.Width, b.BorderTop.Width, b.BorderTop.Color})
+		}
+		if !b.CollapsedBorderPaintSuppressed[1] {
+			segs = append(segs, seg{b.BorderRight.Width, x0 + b.Width - b.BorderRight.Width/2, yBot, b.BorderRight.Width, b.Height, b.BorderRight.Color})
+		}
+		if !b.CollapsedBorderPaintSuppressed[2] {
+			segs = append(segs, seg{b.BorderBottom.Width, x0, yBot - b.BorderBottom.Width/2, b.Width, b.BorderBottom.Width, b.BorderBottom.Color})
+		}
+		if !b.CollapsedBorderPaintSuppressed[3] {
+			segs = append(segs, seg{b.BorderLeft.Width, x0 - b.BorderLeft.Width/2, yBot, b.BorderLeft.Width, b.Height, b.BorderLeft.Color})
+		}
+	} else {
+		segs = []seg{
+			{b.BorderTop.Width, x0, yTop - b.BorderTop.Width, b.Width, b.BorderTop.Width, b.BorderTop.Color},
+			{b.BorderBottom.Width, x0, yBot, b.Width, b.BorderBottom.Width, b.BorderBottom.Color},
+			{b.BorderLeft.Width, x0, yBot, b.BorderLeft.Width, b.Height, b.BorderLeft.Color},
+			{b.BorderRight.Width, x0 + b.Width - b.BorderRight.Width, yBot, b.BorderRight.Width, b.Height, b.BorderRight.Color},
+		}
 	}
 	for _, s := range segs {
 		if s.w <= 0 {

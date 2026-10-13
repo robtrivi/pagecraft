@@ -50,12 +50,12 @@ func TestLayout_SimpleTable_RendersRows(t *testing.T) {
 	if len(blocks) != 4 {
 		t.Fatalf("blocks: got %d, want 4", len(blocks))
 	}
-	// Available width 451 / 2 columns = 225.5; col0 X=72, col1 X=297.5.
-	if blocks[0].X != 72 || blocks[1].X != 297.5 {
-		t.Errorf("columns row 1: got (%v,%v), want (72,297.5)", blocks[0].X, blocks[1].X)
+	// Browser-default 2px border spacing leaves 446.5pt for tracks and 1.5pt at each edge.
+	if blocks[0].X != 73.5 || blocks[1].X != 298.25 {
+		t.Errorf("columns row 1: got (%v,%v), want (73.5,298.25)", blocks[0].X, blocks[1].X)
 	}
-	if blocks[0].Y != 72 {
-		t.Errorf("row 1 y: got %v, want 72", blocks[0].Y)
+	if blocks[0].Y != 73.5 {
+		t.Errorf("row 1 y: got %v, want 73.5", blocks[0].Y)
 	}
 	if blocks[2].Y <= blocks[0].Y {
 		t.Errorf("row 2 did not advance: %v after %v", blocks[2].Y, blocks[0].Y)
@@ -65,6 +65,191 @@ func TestLayout_SimpleTable_RendersRows(t *testing.T) {
 		if blocks[i].Text != w {
 			t.Errorf("block %d: got %q, want %q", i, blocks[i].Text, w)
 		}
+	}
+}
+
+func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("table cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if math.Abs(left.X-1.5) > 0.01 || math.Abs(left.Width-47.75) > 0.01 || math.Abs(right.X-50.75) > 0.01 || math.Abs(right.Width-47.75) > 0.01 {
+		t.Errorf("separate table cell geometry: left=(x %.2f,w %.2f), right=(x %.2f,w %.2f); want Blink's 2px spacing at the table edges and between cells", left.X, left.Width, right.X, right.Width)
+	}
+}
+
+func TestLayout_SeparateTableUsesDeclaredHorizontalAndVerticalSpacing(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0;border-spacing:4pt 6pt}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 4 {
+		t.Fatalf("table cells=%d, want 4", len(blocks))
+	}
+	if math.Abs(blocks[0].X-4) > 0.01 || math.Abs(blocks[0].Width-44) > 0.01 || math.Abs(blocks[1].X-52) > 0.01 {
+		t.Errorf("horizontal spacing geometry: first=(%.2f,%.2f) secondX=%.2f, want (4,44) and 52", blocks[0].X, blocks[0].Width, blocks[1].X)
+	}
+	if math.Abs(blocks[0].Y-6) > 0.01 || math.Abs(blocks[2].Y-(blocks[0].Y+blocks[0].Height+6)) > 0.01 {
+		t.Errorf("vertical spacing geometry: firstY=%.2f secondRowY=%.2f, want 6 and first row bottom plus 6pt", blocks[0].Y, blocks[2].Y)
+	}
+}
+
+func TestLayout_TableFooterSectionFlowsAfterBodyRegardlessOfSourceOrder(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0}</style><table><tfoot><tr><td>FOOTER</td></tr></tfoot><tbody><tr><td>BODY</td></tr></tbody></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	pages := Flow(root, testOptions())
+	var body, footer *PlacedBox
+	for _, block := range pages[0].Blocks {
+		switch block.Text {
+		case "BODY":
+			body = &block
+		case "FOOTER":
+			footer = &block
+		}
+	}
+	if body == nil || footer == nil {
+		t.Fatalf("table sections missing: body=%v footer=%v", body != nil, footer != nil)
+	}
+	if body.Y >= footer.Y {
+		t.Errorf("body row y=%g must precede footer row y=%g even when tfoot occurs first in source", body.Y, footer.Y)
+	}
+}
+
+func TestLayout_TableFixedLayoutUsesColumnAndFirstRowWidths(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;table-layout:fixed;margin:0}td{padding:0;white-space:nowrap}</style><table><col style="width:50pt"><tr><td>FIRST</td><td style="width:60pt">SECOND</td><td>THIRD</td></tr><tr><td>THIS-LONG-CONTENT-MUST-NOT-RESIZE-COLUMN</td><td>X</td><td>Y</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	wants := map[string]float64{"FIRST": 50, "SECOND": 60, "THIRD": 84}
+	for _, block := range Flow(root, opts)[0].Blocks {
+		if want, ok := wants[block.Text]; ok {
+			if math.Abs(block.Width-want) > 0.01 {
+				t.Errorf("fixed table cell %q width=%gpt, want %gpt", block.Text, block.Width, want)
+			}
+			delete(wants, block.Text)
+		}
+	}
+	if len(wants) != 0 {
+		t.Errorf("first-row cells missing from layout: %v", wants)
+	}
+}
+
+func TestLayout_TableFixedLayoutDividesColspanWidthAcrossTracks(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;table-layout:fixed;margin:0}td{padding:0;white-space:nowrap}</style><table><col style="width:50pt"><tr><td colspan="2" style="width:120pt">SPAN</td><td>TAIL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	var span, tail *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "SPAN":
+			span = &block
+		case "TAIL":
+			tail = &block
+		}
+	}
+	if span == nil || tail == nil {
+		t.Fatalf("table cells missing: span=%v tail=%v", span != nil, tail != nil)
+	}
+	if math.Abs(span.Width-110) > 0.01 || math.Abs(tail.Width-84) > 0.01 {
+		t.Errorf("fixed colspan widths=%g/%gpt, want 110/84pt from width 50/60 across the colspan and 84 remaining after border spacing", span.Width, tail.Width)
+	}
+}
+
+func TestLayout_TableFixedLayoutRepeatsColumnSpanWidthPerTrack(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;table-layout:fixed;margin:0}td{padding:0}</style><table><col style="width:40pt" span="2"><tr><td>A</td><td>B</td><td>C</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	wants := map[string]float64{"A": 40, "B": 40, "C": 114}
+	for _, block := range Flow(root, opts)[0].Blocks {
+		if want, ok := wants[block.Text]; ok {
+			if math.Abs(block.Width-want) > 0.01 {
+				t.Errorf("fixed col span cell %q width=%gpt, want %gpt", block.Text, block.Width, want)
+			}
+			delete(wants, block.Text)
+		}
+	}
+	if len(wants) > 0 {
+		t.Errorf("first-row cells missing: %v", wants)
+	}
+}
+
+func TestLayout_TableFixedLayoutExpandsToDeclaredColumnMinimum(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;table-layout:fixed;margin:0}td{padding:0}</style><table><col style="width:150pt"><tr><td>A</td><td>B</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	head, body := tableRows(root.Children[0])
+	grid, cols := tableGridFromRows(append(head, body...))
+	if got := tableUsedWidth(root.Children[0], grid, cols, 300, opts); math.Abs(got-154.5) > 0.01 {
+		t.Errorf("used fixed table width=%gpt, want 154.5pt from its 150pt track and default separate border spacing", got)
+	}
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("table cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if math.Abs(left.Width-150) > 0.01 || math.Abs(right.Width) > 0.01 {
+		t.Errorf("fixed table widths=%g/%gpt, want 150/0pt because the table expands to its column minimum", left.Width, right.Width)
+	}
+}
+
+func TestLayout_AutoTableHonorsColumnElementWidth(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;margin:0}td{padding:0}</style><table><col style="width:150pt"><tr><td>A</td><td>B</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if math.Abs(left.Width-150) > 0.01 || math.Abs(right.Width-45.5) > 0.01 {
+		t.Errorf("auto table widths=%g/%gpt, want 150/45.5pt from col width plus remaining auto track after border spacing", left.Width, right.Width)
 	}
 }
 
@@ -995,8 +1180,8 @@ func TestLayout_TableCellPaddingOffsetsContentAndExpandsRow(t *testing.T) {
 	if run.X != cell.X+3.75 || run.Y != cell.Y+3.75 {
 		t.Errorf("text origin: got (%v,%v), want (%v,%v)", run.X, run.Y, cell.X+3.75, cell.Y+3.75)
 	}
-	if blocks[2].Y != cell.Y+cell.Height {
-		t.Errorf("following row starts in %v, want %v", blocks[2].Y, cell.Y+cell.Height)
+	if blocks[2].Y != cell.Y+cell.Height+1.5 {
+		t.Errorf("following row starts in %v, want %v including the default row spacing", blocks[2].Y, cell.Y+cell.Height+1.5)
 	}
 }
 
@@ -1012,8 +1197,8 @@ func TestLayout_TableCellBordersContributeToRowHeightAndTextOffset(t *testing.T)
 	if len(cell.Runs) != 1 || len(cell.Runs[0]) != 1 {
 		t.Fatalf("corridas of cell: %#v", cell.Runs)
 	}
-	if got := cell.Runs[0][0].Y; got != 77.75 {
-		t.Errorf("text must start after the top border and padding: y=%v, want 77.75", got)
+	if got := cell.Runs[0][0].Y; got != 79.25 {
+		t.Errorf("text must start after table spacing, top border, and padding: y=%v, want 79.25", got)
 	}
 }
 
@@ -1076,8 +1261,9 @@ func TestLayout_TableMarginsCollapseWithAdjacentBlocks(t *testing.T) {
 		t.Fatalf("could not locate paragraph and cell: %#v", blocks)
 	}
 	want := paragraph.Y + paragraph.Height + 12
+	want += 1.5
 	if !approx(cell.Y, want) {
-		t.Errorf("cell y=%v, want %v when collapsing margin-bottom 8pt and margin-top 12pt", cell.Y, want)
+		t.Errorf("cell y=%v, want %v when collapsing margins and applying default table spacing", cell.Y, want)
 	}
 }
 
@@ -1187,8 +1373,8 @@ func TestLayout_CollapsedTableEdgesResolveCellBeforeStructuralTies(t *testing.T)
 	if total == nil {
 		t.Fatal("total cell not found")
 	}
-	if total.BorderTop.Width != 1 {
-		t.Errorf("painted top half width=%g, want 1pt", total.BorderTop.Width)
+	if total.BorderTop.Width != 2 {
+		t.Errorf("resolved top edge width=%g, want full 2pt", total.BorderTop.Width)
 	}
 	if total.BorderTop.Color[2] != 1 || total.BorderTop.Color[0] != 0 {
 		t.Errorf("equal-width collapsed border color=%v, want cell blue", total.BorderTop.Color)
@@ -1213,8 +1399,238 @@ func TestLayout_CollapsedTableSharedCellEdgeUsesWiderCandidate(t *testing.T) {
 		t.Fatalf("cells not found: left=%v right=%v", left != nil, right != nil)
 	}
 	for name, side := range map[string]boxes.BorderSide{"left cell": left.BorderRight, "right cell": right.BorderLeft} {
-		if side.Width != 1.5 || side.Color[2] != 1 {
-			t.Errorf("%s shared edge=%+v, want 1.5pt blue half", name, side)
+		if side.Width != 3 || side.Color[2] != 1 {
+			t.Errorf("%s shared edge=%+v, want full 3pt blue winner", name, side)
 		}
+	}
+}
+
+func TestLayout_CollapsedTableSharedRowEdgeUsesOneWinner(t *testing.T) {
+	root, err := boxes.Build(`<style>table{border-collapse:collapse}tr:first-child td{border-bottom:2pt solid red}tr:last-child td{border-top:1pt solid blue}</style><table><tr><td>UPPER</td></tr><tr><td>LOWER</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var upper, lower *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "UPPER":
+			upper = &block
+		case "LOWER":
+			lower = &block
+		}
+	}
+	if upper == nil || lower == nil {
+		t.Fatalf("row cells not found: upper=%v lower=%v", upper != nil, lower != nil)
+	}
+	for name, side := range map[string]boxes.BorderSide{"upper bottom": upper.BorderBottom, "lower top": lower.BorderTop} {
+		if side.Width != 2 || side.Color[0] != 1 || side.Color[2] != 0 {
+			t.Errorf("%s edge=%+v, want the shared 2pt red border winner", name, side)
+		}
+	}
+}
+
+func TestLayout_CollapsedTableSharedEdgeUsesBorderStylePrecedence(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;border-collapse:collapse}td{padding:0;font:10pt/12pt Helvetica}tr:first-child td{border-bottom:2pt dashed blue}tr:last-child td{border-top:2pt solid red}</style><table><tr><td>UPPER</td></tr><tr><td>LOWER</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var upper, lower *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "UPPER":
+			upper = &block
+		case "LOWER":
+			lower = &block
+		}
+	}
+	if upper == nil || lower == nil {
+		t.Fatalf("table cells missing: upper=%v lower=%v", upper != nil, lower != nil)
+	}
+	if upper.BorderBottom.Color != ([4]float64{1, 0, 0, 1}) || lower.BorderTop.Color != ([4]float64{1, 0, 0, 1}) {
+		t.Errorf("shared edge did not use solid over dashed: upper=%+v lower=%+v", upper.BorderBottom, lower.BorderTop)
+	}
+}
+
+func TestLayout_CollapsedTableHiddenBorderSuppressesSharedEdge(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;border-collapse:collapse}td{padding:0;font:10pt/12pt Helvetica}tr:first-child td{border-bottom:1pt solid blue}tr:last-child td{border-top:5pt hidden red}</style><table><tr><td>UPPER</td></tr><tr><td>LOWER</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var upper, lower *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "UPPER":
+			upper = &block
+		case "LOWER":
+			lower = &block
+		}
+	}
+	if upper == nil || lower == nil {
+		t.Fatalf("table cells missing: upper=%v lower=%v", upper != nil, lower != nil)
+	}
+	if upper.BorderBottom.Width != 0 || lower.BorderTop.Width != 0 {
+		t.Errorf("hidden border must suppress the shared edge: upper=%+v lower=%+v", upper.BorderBottom, lower.BorderTop)
+	}
+}
+
+func TestLayout_CollapsedTableUsesColumnAndColumnGroupBorders(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;border-collapse:collapse}td{padding:0;font:10pt/12pt Helvetica}</style><table><colgroup style="border-right:3pt solid red"><col style="border-right:2pt solid green"><col></colgroup><tr><td>LEFT</td><td>RIGHT</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var left, right *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "LEFT":
+			left = &block
+		case "RIGHT":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("table cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if left.BorderRight.Color != ([4]float64{0, 0.5, 0, 1}) || right.BorderLeft.Color != left.BorderRight.Color {
+		t.Errorf("column border missing at shared edge: left=%+v right=%+v", left.BorderRight, right.BorderLeft)
+	}
+	if right.BorderRight.Width != 3 || right.BorderRight.Color != ([4]float64{1, 0, 0, 1}) {
+		t.Errorf("column-group outer border=%+v, want 3pt red", right.BorderRight)
+	}
+}
+
+func TestLayout_TablePercentageColumnsDistributeUnusedWidthByDeclaredShares(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;margin:0;border-collapse:collapse}td:first-child{width:58%}td:last-child{width:37%}</style><table><tr><td>LEFT</td><td>RIGHT</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "LEFT":
+			left = &block
+		case "RIGHT":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("cells not found: left=%v right=%v", left != nil, right != nil)
+	}
+	wantLeft := 200.0 * 58 / 95
+	if math.Abs(left.Width-wantLeft) > 0.01 {
+		t.Errorf("left column width=%gpt, want %gpt after percentage columns receive leftover width", left.Width, wantLeft)
+	}
+	if math.Abs(right.Width-(200-wantLeft)) > 0.01 {
+		t.Errorf("right column width=%gpt, want %gpt after percentage columns receive leftover width", right.Width, 200-wantLeft)
+	}
+}
+
+func TestLayout_TablePercentageColspanDistributesByTrackIntrinsicWidths(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;margin:0;border-collapse:collapse}td{padding:0;font:10pt/12pt Helvetica;white-space:nowrap}</style><table><tr><td colspan="2" style="width:70%">SPAN</td><td>TAIL</td></tr><tr><td>WIDEVALUEWIDE</td><td>X</td><td>Z</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	head, body := tableRows(root.Children[0])
+	rows := append(head, body...)
+	grid, cols := tableGridFromRows(rows)
+	tracks := tableIntrinsicColumns(grid, cols, opts)
+	spanMax := tracks[0].max + tracks[1].max
+	wants := map[string]float64{
+		"WIDEVALUEWIDE": 140 * tracks[0].max / spanMax,
+		"X":             140 * tracks[1].max / spanMax,
+		"Z":             60,
+	}
+	for _, block := range Flow(root, opts)[0].Blocks {
+		if want, ok := wants[block.Text]; ok {
+			if math.Abs(block.Width-want) > 0.01 {
+				t.Errorf("column for %q width=%gpt, want %.2fpt based on max-content distribution of a spanning percentage", block.Text, block.Width, want)
+			}
+			delete(wants, block.Text)
+		}
+	}
+	if len(wants) > 0 {
+		t.Errorf("cells missing from layout: %v", wants)
+	}
+}
+
+func TestLayout_TablePercentageColumnsOver100ReduceFromLastColumn(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;margin:0;border-collapse:collapse}td:first-child{width:80%}td:last-child{width:80%}</style><table><tr><td>L</td><td>R</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "L":
+			left = &block
+		case "R":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("cells not found: left=%v right=%v", left != nil, right != nil)
+	}
+	if math.Abs(left.Width-160) > 0.01 || math.Abs(right.Width-40) > 0.01 {
+		t.Errorf("overallocated percentage widths=%g/%gpt, want 160/40pt (trim excess from last column)", left.Width, right.Width)
+	}
+}
+
+func TestLayout_TablePercentageWidthFromLaterRowConstrainsItsColumn(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}table{width:200pt;margin:0;border-collapse:collapse}td{padding:0;font:10pt/12pt Helvetica;white-space:nowrap}</style><table><tr><td>A</td><td>B</td></tr><tr><td style="width:70%">C</td><td>D</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 300, 100, 0
+	var firstColumn, secondColumn *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			firstColumn = &block
+		case "B":
+			secondColumn = &block
+		}
+	}
+	if firstColumn == nil || secondColumn == nil {
+		t.Fatalf("first-row cells not found: first=%v second=%v", firstColumn != nil, secondColumn != nil)
+	}
+	if math.Abs(firstColumn.Width-140) > 0.01 || math.Abs(secondColumn.Width-60) > 0.01 {
+		t.Errorf("first-row widths=%g/%gpt, want 140/60pt from the later row's 70%% column constraint", firstColumn.Width, secondColumn.Width)
+	}
+}
+
+func TestLayout_CollapsedTableOuterBottomBorderReservesHalfWidth(t *testing.T) {
+	root, err := boxes.Build(`<style>table{width:100pt;border-collapse:collapse;border-bottom:1pt solid red}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>FIRST</td></tr><tr><td>LAST</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var first, last *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "FIRST":
+			first = &block
+		case "LAST":
+			last = &block
+		}
+	}
+	if first == nil || last == nil {
+		t.Fatalf("table rows not found: first=%v last=%v", first != nil, last != nil)
+	}
+	if math.Abs(first.Height-12) > 0.01 {
+		t.Errorf("first row height=%gpt, want 12pt without the table's outer bottom border", first.Height)
+	}
+	if math.Abs(last.Height-12.5) > 0.01 {
+		t.Errorf("last row height=%gpt, want 12.5pt including half of the 1pt collapsed outer border", last.Height)
+	}
+	if first.BorderBottom.Width != 0 {
+		t.Errorf("intermediate row bottom border=%gpt, want no table outer border", first.BorderBottom.Width)
+	}
+	if last.BorderBottom.Width != 1 {
+		t.Errorf("last row bottom border=%gpt, want the table's 1pt outer border", last.BorderBottom.Width)
 	}
 }

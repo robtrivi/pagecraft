@@ -223,46 +223,48 @@ func DefaultOptions() Options {
 
 // PlacedBox is a positioned block. X and and are its top-left coordinates in points.
 type PlacedBox struct {
-	fragmentNode             *FragmentNode
-	source                   *boxes.Box
-	sourceParent             *boxes.Box
-	fragmentRef              *fragmentOccurrence
-	parentFragmentRef        *fragmentOccurrence
-	repeated                 bool
-	FragmentainerIndex       int // 0 is page flow; columns start at 1.
-	Text                     string
-	Image                    *images.Raster // resolved <img> content
-	SVG                      *svg.Document  // SVG inline
-	HasBg                    bool
-	Bg                       [4]float64
-	BorderWidth              float64
-	BorderCornerRadii        [4]boxes.CornerRadius
-	Border                   [4]float64
-	BorderTop, BorderRight   boxes.BorderSide
-	BorderBottom, BorderLeft boxes.BorderSide
-	FontSize                 float64 // resolved (Options default when the box does not set one)
-	HasColor                 bool
-	Color                    [4]float64
-	Link                     string
-	Align                    string // left | center | right | justify
-	PadLeft                  float64
-	PadRight                 float64
-	Font                     *fonts.Face // nil = Helvetica base-14
-	Bold                     bool
-	Italic                   bool
-	Underline                bool
-	Strike                   bool
-	Opacity                  float64
-	HasOpacity               bool
-	OpacityGroups            []OpacityGroup
-	TablePaintUnderlays      []TablePaintLayer
-	TablePaintOverlays       []TablePaintLayer
-	ClipRects                []ClipRect
-	LetterSpacing            float64
-	Runs                     [][]TextRun // Inline runs per line; nil outside normal flow.
-	X, Y                     float64
-	Width                    float64
-	Height                   float64
+	fragmentNode                   *FragmentNode
+	source                         *boxes.Box
+	sourceParent                   *boxes.Box
+	fragmentRef                    *fragmentOccurrence
+	parentFragmentRef              *fragmentOccurrence
+	repeated                       bool
+	FragmentainerIndex             int // 0 is page flow; columns start at 1.
+	Text                           string
+	Image                          *images.Raster // resolved <img> content
+	SVG                            *svg.Document  // SVG inline
+	HasBg                          bool
+	CollapsedTableCell             bool    // Borders are centered on collapsed table-grid edges.
+	CollapsedBorderPaintSuppressed [4]bool // top, right, bottom, left
+	Bg                             [4]float64
+	BorderWidth                    float64
+	BorderCornerRadii              [4]boxes.CornerRadius
+	Border                         [4]float64
+	BorderTop, BorderRight         boxes.BorderSide
+	BorderBottom, BorderLeft       boxes.BorderSide
+	FontSize                       float64 // resolved (Options default when the box does not set one)
+	HasColor                       bool
+	Color                          [4]float64
+	Link                           string
+	Align                          string // left | center | right | justify
+	PadLeft                        float64
+	PadRight                       float64
+	Font                           *fonts.Face // nil = Helvetica base-14
+	Bold                           bool
+	Italic                         bool
+	Underline                      bool
+	Strike                         bool
+	Opacity                        float64
+	HasOpacity                     bool
+	OpacityGroups                  []OpacityGroup
+	TablePaintUnderlays            []TablePaintLayer
+	TablePaintOverlays             []TablePaintLayer
+	ClipRects                      []ClipRect
+	LetterSpacing                  float64
+	Runs                           [][]TextRun // Inline runs per line; nil outside normal flow.
+	X, Y                           float64
+	Width                          float64
+	Height                         float64
 }
 
 // TablePaintLayer retains the source box and fragment geometry for table,
