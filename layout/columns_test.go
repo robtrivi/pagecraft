@@ -157,6 +157,41 @@ func TestLayout_ColumnFillAutoBalancesContentBeforeSpanner(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnsBalanceUnequalLineHeightsAcrossColumns(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0;font:10pt/20pt Helvetica">A</p><p style="margin:0;font:10pt/20pt Helvetica">B</p><p style="margin:0;font:10pt/20pt Helvetica">C</p><p style="margin:0;font:10pt/1pt Helvetica">D</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 200, 10
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 4 {
+		t.Fatalf("blocks=%d, want 4", len(blocks))
+	}
+	if blocks[0].X != 10 || blocks[1].X != 10 || blocks[2].X != 110 || blocks[3].X != 110 {
+		t.Errorf("column positions=%g/%g/%g/%g, want 10/10/110/110", blocks[0].X, blocks[1].X, blocks[2].X, blocks[3].X)
+	}
+	if blocks[1].Y != 30 || blocks[2].Y != 10 || blocks[3].Y != 30 {
+		t.Errorf("block y positions=%g/%g/%g, want 30/10/30", blocks[1].Y, blocks[2].Y, blocks[3].Y)
+	}
+}
+
+func TestLayout_ColumnsBalanceIndivisibleBlocksAcrossAllColumns(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:3;column-gap:0"><div style="margin:0;padding:1pt 0;font:1pt/5pt Helvetica">A</div><div style="margin:0;padding:1pt 0;font:1pt/5pt Helvetica">B</div><div style="margin:0;padding:1pt 0;font:1pt/4pt Helvetica">C</div><div style="margin:0;padding:1pt 0;font:1pt/4pt Helvetica">D</div><div style="margin:0;padding:1pt 0;font:1pt/4pt Helvetica">E</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 200, 10
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 5 {
+		t.Fatalf("blocks=%d, want 5", len(blocks))
+	}
+	if blocks[0].X != 10 || blocks[0].X == blocks[1].X || blocks[1].X != blocks[2].X || blocks[2].X == blocks[3].X || blocks[3].X != blocks[4].X {
+		t.Errorf("column positions=%g/%g/%g/%g/%g, want groups 1/2/2", blocks[0].X, blocks[1].X, blocks[2].X, blocks[3].X, blocks[4].X)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {

@@ -44,7 +44,6 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 	n := usedColumnCount(container.Style, usable, gap)
 	colW := (usable - float64(n-1)*gap) / float64(n)
 	layouts := make([]columnItemLayout, len(kids))
-	remainingHeight := 0.0
 	for index, item := range kids {
 		if item.Style.Float != boxes.FloatNone {
 			contentWidth := math.Max(0, usedWidth(item, colW)-horizontalInsets(item))
@@ -65,79 +64,8 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 			height = imageHeight + verticalInsets(item)
 		}
 		layouts[index] = columnItemLayout{lines: lines, height: height}
-		remainingHeight += height + item.Style.MarginTop + item.Style.MarginBottom
 	}
-	if hasSplittableColumnText(kids) {
-		return flowColumnFragments(container, kids, layouts, y, pages, opts, usable, bottom, n, gap, colW, remainingHeight, balance)
-	}
-	end := y
-	rulePage := len(*pages) - 1
-	start := 0
-	for col := 0; col < n; col++ {
-		remainingColumns := n - col
-		it := start
-		hi := len(kids)
-		if balance && remainingColumns > 1 {
-			maxEnd := len(kids) - (remainingColumns - 1)
-			target := remainingHeight / float64(remainingColumns)
-			bestEnd, bestDistance, candidateHeight := it+1, math.Inf(1), 0.0
-			for candidateEnd := it + 1; candidateEnd <= maxEnd; candidateEnd++ {
-				item := kids[candidateEnd-1]
-				candidateHeight += layouts[candidateEnd-1].height + item.Style.MarginTop + item.Style.MarginBottom
-				distance := math.Abs(candidateHeight - target)
-				if distance < bestDistance {
-					bestEnd, bestDistance = candidateEnd, distance
-				}
-			}
-			hi = bestEnd
-		}
-		yc := y
-		for index := it; index < hi; index++ {
-			it := kids[index]
-			fs := resolveSize(it, opts)
-			_, font := measureFor(opts, it)
-			item := layouts[index]
-			h := item.height
-			yc += it.Style.MarginTop
-			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-			fragment := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: pageBreakValue(it.Style.BreakBefore)}, yc, opts.top(), bottom, pageHasContent, pages, opts)
-			yc = fragment.y
-			p := &(*pages)[len(*pages)-1]
-			columnX := opts.left() + float64(col)*(colW+gap)
-			pb := placed(it, it.Text,
-				nil, columnX, yc, colW, h, fs, font)
-			pb.FragmentainerIndex = col + 1
-			pb.Runs = assignRuns(it, item.lines,
-				columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
-				math.Max(0, colW-horizontalInsets(it)), yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
-			p.emitBlock(pb)
-			yc += h + it.Style.MarginBottom
-		}
-		if yc > end {
-			end = yc
-		}
-		start = hi
-		remainingHeight = 0
-		for index := start; index < len(kids); index++ {
-			if kids[index].Style.Float != boxes.FloatNone {
-				continue
-			}
-			remainingHeight += layouts[index].height + kids[index].Style.MarginTop + kids[index].Style.MarginBottom
-		}
-	}
-	if container.Style.ColumnRuleWidth > 0 && gap > 0 {
-		page := rulePage
-		for len(*pages) <= page {
-			*pages = append(*pages, Page{Number: len(*pages) + 1})
-		}
-		for col := 0; col < n-1; col++ {
-			x := opts.left() + float64(col+1)*colW + float64(col)*gap + (gap-container.Style.ColumnRuleWidth)/2
-			rule := PlacedBox{X: x, Y: y, Height: end - y}
-			rule.BorderLeft = boxes.BorderSide{Width: container.Style.ColumnRuleWidth, Color: container.Style.ColumnRuleColor}
-			(*pages)[page].emitBlock(rule)
-		}
-	}
-	return end
+	return flowColumnFragments(container, kids, layouts, y, pages, opts, usable, bottom, n, gap, colW, balance)
 }
 
 func isMultiColumn(b *boxes.Box) bool {
@@ -162,24 +90,12 @@ func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int
 	return count
 }
 
-func hasSplittableColumnText(kids []*boxes.Box) bool {
-	for _, item := range kids {
-		if item.Style.Float != boxes.FloatNone {
-			return true
-		}
-		if columnTextCanSplit(item) {
-			return true
-		}
-	}
-	return false
-}
-
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, totalHeight float64, balance bool) float64 {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW float64, balance bool) float64 {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
-	target := totalHeight / float64(n)
-	if !balance {
-		target = math.Max(0, bottom-y)
+	target := math.Max(0, bottom-y)
+	if balance {
+		target = balancedColumnHeight(kids, layouts, opts, n)
 	}
 	index, lineOffset, end := 0, 0, y
 	continuationX, continuationY := opts.left(), y
@@ -365,6 +281,91 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		}
 	}
 	return end
+}
+
+type columnBalanceUnit struct {
+	height      float64
+	breakBefore bool
+}
+
+func balancedColumnHeight(kids []*boxes.Box, layouts []columnItemLayout, opts Options, columns int) float64 {
+	units := columnBalanceUnits(kids, layouts, opts)
+	if len(units) == 0 {
+		return 0
+	}
+	low, high := 0.0, 0.0
+	for _, unit := range units {
+		low = math.Max(low, unit.height)
+		high += unit.height
+	}
+	if columns < 1 {
+		columns = 1
+	}
+	low = math.Max(low, high/float64(columns))
+	for attempt := 0; attempt < 52 && high-low > fragmentEpsilon; attempt++ {
+		middle := (low + high) / 2
+		if columnBalanceFits(units, middle, columns) {
+			high = middle
+		} else {
+			low = middle
+		}
+	}
+	return high
+}
+
+func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []columnBalanceUnit {
+	var units []columnBalanceUnit
+	previousBottomMargin, hasPreviousItem := 0.0, false
+	breakPending := false
+	for index, item := range kids {
+		forcedBefore := pageBreakValue(item.Style.BreakBefore) == fragmentBreakPage ||
+			(index > 0 && forcedPageBreakBetween(kids[index-1], item)) || breakPending
+		if forcedBefore {
+			previousBottomMargin, hasPreviousItem = 0, false
+		}
+		if item.Style.Float != boxes.FloatNone {
+			previousBottomMargin, hasPreviousItem = 0, false
+			breakPending = item.Style.BreakAfter == boxes.BreakAfterPage
+			continue
+		}
+		layout := layouts[index]
+		if columnTextCanSplit(item) && len(layout.lines) > 0 {
+			for lineIndex, line := range layout.lines {
+				height := lineHeightW(line, item, opts)
+				if lineIndex == 0 {
+					height += columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, item.Style.MarginTop)
+				}
+				if lineIndex == len(layout.lines)-1 {
+					height += item.Style.MarginBottom
+				}
+				units = append(units, columnBalanceUnit{height: height, breakBefore: forcedBefore && lineIndex == 0})
+			}
+		} else {
+			gap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, item.Style.MarginTop)
+			units = append(units, columnBalanceUnit{height: layout.height + gap + item.Style.MarginBottom, breakBefore: forcedBefore})
+		}
+		previousBottomMargin, hasPreviousItem = item.Style.MarginBottom, true
+		breakPending = item.Style.BreakAfter == boxes.BreakAfterPage
+	}
+	return units
+}
+
+func columnBalanceFits(units []columnBalanceUnit, height float64, maxColumns int) bool {
+	columns, used := 1, 0.0
+	for _, unit := range units {
+		if unit.breakBefore {
+			columns, used = 1, 0
+		}
+		if used > 0 && used+unit.height > height+fragmentEpsilon {
+			columns++
+			used = 0
+		}
+		if columns > maxColumns {
+			return false
+		}
+		used += unit.height
+	}
+	return true
 }
 
 func columnCollapsedMarginGap(previous float64, hasPrevious bool, current float64) float64 {

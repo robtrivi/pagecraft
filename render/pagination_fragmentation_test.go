@@ -121,7 +121,7 @@ body { font: 9.5pt/1.35 Helvetica; }
 			if strings.Contains(strings.ToLower(block.Text), "must stay") && block.FragmentainerIndex == 1 {
 				sharedFloatLineInFirstColumn = true
 			}
-			if strings.Contains(strings.ToLower(block.Text), "this paragraph") || strings.Contains(strings.ToLower(block.Text), "reading order") || strings.Contains(strings.ToLower(block.Text), "remaining space") {
+			if strings.Contains(strings.ToLower(block.Text), "this paragraph") || strings.Contains(strings.ToLower(block.Text), "reading order") || strings.Contains(strings.ToLower(block.Text), "remaining space") || strings.Contains(strings.ToLower(block.Text), "continue at the top of the next one") {
 				for _, line := range block.Runs {
 					if len(line) > 0 && line[0].X >= 300 {
 						p2SecondColumnBottom = line[0].Y + line[0].LineH
