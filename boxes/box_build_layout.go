@@ -1,7 +1,9 @@
 package boxes
 
 import (
+	"math"
 	"strconv"
+	"strings"
 
 	"github.com/robtrivi/pagecraft/css"
 	"golang.org/x/net/html"
@@ -50,10 +52,30 @@ func applyBoxSizingStyle(b *Box, decls css.Declarations) {
 		}
 	}
 	b.Style.BorderCollapse = decls["border-collapse"] == "collapse"
+	b.Style.TableLayoutFixed = decls["table-layout"] == "fixed"
+	if spacing, ok := decls["border-spacing"]; ok {
+		if horizontal, vertical, valid := parseTableBorderSpacing(spacing); valid {
+			b.Style.TableBorderSpacingX, b.Style.TableBorderSpacingY = horizontal, vertical
+		}
+	}
 }
 
 func applyTableCellStyle(b *Box, the *html.Node, decls css.Declarations) {
 	b.Style.ColSpan, b.Style.RowSpan = 1, 1
+	if the.Data == "table" {
+		if width, valid := parseHTMLTableWidth(getAttr(the, "width"), true); valid {
+			b.Style.Sizing.Width = width
+		}
+	}
+	if the.Data == "col" || the.Data == "colgroup" {
+		b.Style.TableColumnSpan = 1
+		if span, err := strconv.Atoi(getAttr(the, "span")); err == nil && span > 1 {
+			b.Style.TableColumnSpan = span
+		}
+		if width, valid := parseHTMLTableWidth(getAttr(the, "width"), true); valid {
+			b.Style.Sizing.Width = width
+		}
+	}
 	if the.Data == "td" || the.Data == "th" {
 		if n, err := strconv.Atoi(getAttr(the, "colspan")); err == nil && n > 1 {
 			b.Style.ColSpan = n
@@ -61,8 +83,8 @@ func applyTableCellStyle(b *Box, the *html.Node, decls css.Declarations) {
 		if n, err := strconv.Atoi(getAttr(the, "rowspan")); err == nil && n > 1 {
 			b.Style.RowSpan = n
 		}
-		if w, ok := parsePercent(getAttr(the, "width")); ok {
-			b.Style.Sizing.Width = CSSDimension{Kind: DimensionPercentage, Value: w}
+		if width, ok := parseHTMLTableWidth(getAttr(the, "width"), false); ok {
+			b.Style.Sizing.Width = width
 		}
 		if w, ok := decls["width"]; ok {
 			if f, ok := parsePercent(w); ok {
@@ -70,4 +92,35 @@ func applyTableCellStyle(b *Box, the *html.Node, decls css.Declarations) {
 			}
 		}
 	}
+}
+
+// parseHTMLTableWidth converts the legacy HTML width attribute into its CSS
+// presentation-hint value. Unitless lengths in these attributes are CSS px;
+// CSS declarations continue to use parseCSSDimension and its normal units.
+func parseHTMLTableWidth(value string, allowZero bool) (CSSDimension, bool) {
+	value = strings.TrimSpace(value)
+	if percentage, ok := parsePercent(value); ok {
+		return CSSDimension{Kind: DimensionPercentage, Value: percentage}, true
+	}
+	end := 0
+	for end < len(value) {
+		character := value[end]
+		if character >= '0' && character <= '9' || character == '.' {
+			end++
+			continue
+		}
+		break
+	}
+	if end < len(value) && value[end] == '%' {
+		percentage, ok := parsePercent(value[:end+1])
+		if !ok {
+			return CSSDimension{}, false
+		}
+		return CSSDimension{Kind: DimensionPercentage, Value: percentage}, true
+	}
+	length, err := strconv.ParseFloat(value[:end], 64)
+	if err != nil || length < 0 || !allowZero && length == 0 || math.IsInf(length, 0) || math.IsNaN(length) {
+		return CSSDimension{}, false
+	}
+	return CSSDimension{Kind: DimensionLength, Value: length * css.PxToPt}, true
 }

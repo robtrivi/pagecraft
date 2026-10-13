@@ -50,6 +50,7 @@ type CornerRadius struct {
 type BorderSide struct {
 	Width float64
 	Color [4]float64
+	Style string
 }
 
 // parsePercent parses a nonnegative "N%" value.
@@ -63,6 +64,25 @@ func parsePercent(s string) (float64, bool) {
 		return 0, false
 	}
 	return f, true
+}
+
+func parseTableBorderSpacing(value string) (horizontal, vertical float64, valid bool) {
+	parts := strings.Fields(value)
+	if len(parts) < 1 || len(parts) > 2 {
+		return 0, 0, false
+	}
+	first, ok := parseCSSDimension(parts[0])
+	if !ok || !first.IsLength() {
+		return 0, 0, false
+	}
+	second := first
+	if len(parts) == 2 {
+		second, ok = parseCSSDimension(parts[1])
+		if !ok || !second.IsLength() {
+			return 0, 0, false
+		}
+	}
+	return first.Value, second.Value, true
 }
 
 // countTracks counts tracks of grid-template-columns: list or repeat(n, ...).
@@ -348,4 +368,14 @@ func parseBorder(s string) (float64, [4]float64, bool) {
 		return 0, [4]float64{}, false
 	}
 	return width, col, true
+}
+
+func borderStyleToken(value string) string {
+	for _, token := range strings.Fields(strings.ToLower(value)) {
+		switch token {
+		case "none", "hidden", "solid", "dotted", "dashed", "double", "groove", "ridge", "inset", "outset":
+			return token
+		}
+	}
+	return "none"
 }

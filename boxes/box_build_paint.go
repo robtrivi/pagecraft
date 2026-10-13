@@ -1,10 +1,6 @@
 package boxes
 
-import (
-	"strings"
-
-	"github.com/robtrivi/pagecraft/css"
-)
+import "github.com/robtrivi/pagecraft/css"
 
 func applyPaintStyle(b *Box, decls css.Declarations) {
 	if bg, ok := decls["background"]; ok {
@@ -28,8 +24,13 @@ func applyPaintStyle(b *Box, decls css.Declarations) {
 		if w, c, ok := parseBorder(bd); ok {
 			b.Style.BorderWidth = w
 			b.Style.Border = c
-			side := BorderSide{Width: w, Color: c}
+			side := BorderSide{Width: w, Color: c, Style: borderStyleToken(bd)}
 			b.Style.BorderTop, b.Style.BorderRight, b.Style.BorderBottom, b.Style.BorderLeft = side, side, side, side
+		} else if borderStyleToken(bd) == "hidden" {
+			side := BorderSide{Style: "hidden"}
+			b.Style.BorderTop, b.Style.BorderRight, b.Style.BorderBottom, b.Style.BorderLeft = side, side, side, side
+		} else if borderStyleToken(bd) == "none" {
+			b.Style.BorderTop, b.Style.BorderRight, b.Style.BorderBottom, b.Style.BorderLeft = BorderSide{}, BorderSide{}, BorderSide{}, BorderSide{}
 		}
 	}
 	if rule, ok := decls["column-rule"]; ok {
@@ -42,10 +43,12 @@ func applyPaintStyle(b *Box, decls css.Declarations) {
 		prop string
 	}{{"Top", "border-top"}, {"Right", "border-right"}, {"Bottom", "border-bottom"}, {"Left", "border-left"}} {
 		if bd, ok := decls[sb.prop]; ok {
-			if t := strings.TrimSpace(bd); t == "none" || t == "hidden" {
+			if style := borderStyleToken(bd); style == "hidden" {
+				setBorderSide(b, sb.name, BorderSide{Style: "hidden"})
+			} else if style == "none" {
 				setBorderSide(b, sb.name, BorderSide{})
 			} else if w, c, ok := parseBorder(bd); ok {
-				setBorderSide(b, sb.name, BorderSide{Width: w, Color: c})
+				setBorderSide(b, sb.name, BorderSide{Width: w, Color: c, Style: borderStyleToken(bd)})
 			}
 		}
 	}

@@ -36,6 +36,79 @@ func TestBoxes_ComputedLayoutModesUseTypedValues(t *testing.T) {
 	}
 }
 
+func TestBoxes_TableRetainsFixedLayoutAndColumnTrackSpans(t *testing.T) {
+	root, err := Build(`<table style="table-layout:fixed;width:200pt"><colgroup><col style="width:50pt"><col width="25%" span="2"></colgroup><tr><td>A</td><td>B</td><td>C</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	table := root.Children[0]
+	if !table.Style.TableLayoutFixed {
+		t.Fatal("table-layout:fixed was not retained in computed style")
+	}
+	group := table.Children[0]
+	columns := group.Children
+	if len(columns) != 2 || columns[0].Style.TableColumnSpan != 1 || columns[1].Style.TableColumnSpan != 2 {
+		t.Fatalf("column tracks=%+v, want spans 1 and 2", columns)
+	}
+	if got := columns[0].Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 50}) {
+		t.Errorf("first column width=%+v, want 50pt", got)
+	}
+	if got := columns[1].Style.Sizing.Width; got != (CSSDimension{Kind: DimensionPercentage, Value: 25}) {
+		t.Errorf("spanning column width=%+v, want 25%%", got)
+	}
+}
+
+func TestBoxes_HTMLTableWidthAttributesUseCSSPixelUnits(t *testing.T) {
+	root, err := Build(`<table><col width="40"><tr><td width="32">CELL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	col := root.Children[0].Children[0].Children[0]
+	cell := root.Children[0].Children[1].Children[0].Children[0]
+	if got := col.Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 30}) {
+		t.Errorf("col width attribute=%+v, want 40 CSS px = 30pt", got)
+	}
+	if got := cell.Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 24}) {
+		t.Errorf("cell width attribute=%+v, want 32 CSS px = 24pt", got)
+	}
+}
+
+func TestBoxes_HTMLTableWidthAttributeIgnoresTrailingUnitText(t *testing.T) {
+	root, err := Build(`<table><col width="40pt"><tr><td width="32pt">CELL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	col := root.Children[0].Children[0].Children[0]
+	cell := root.Children[0].Children[1].Children[0].Children[0]
+	if got := col.Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 30}) {
+		t.Errorf("col width attribute=%+v, want numeric prefix 40 CSS px = 30pt", got)
+	}
+	if got := cell.Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 24}) {
+		t.Errorf("cell width attribute=%+v, want numeric prefix 32 CSS px = 24pt", got)
+	}
+}
+
+func TestBoxes_HTMLTableWidthAttributeUsesCSSPixelUnits(t *testing.T) {
+	root, err := Build(`<table width="120"><tr><td>CELL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := root.Children[0].Style.Sizing.Width; got != (CSSDimension{Kind: DimensionLength, Value: 90}) {
+		t.Errorf("table width attribute=%+v, want 120 CSS px = 90pt", got)
+	}
+}
+
+func TestBoxes_HTMLTableCellWidthAttributeIgnoresZero(t *testing.T) {
+	root, err := Build(`<table><tr><td width="0">CELL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	cell := root.Children[0].Children[0].Children[0].Children[0]
+	if got := cell.Style.Sizing.Width.Kind; got != DimensionAuto {
+		t.Errorf("cell width attribute kind=%v, want auto because Blink ignores zero", got)
+	}
+}
+
 func TestBoxes_ComputedDimensionsPreserveAutoLengthAndPercentage(t *testing.T) {
 	root, err := Build(`<div><span></span><span style="width:0pt;height:0pt"></span><span style="width:50%"></span><span style="width:0%"></span><span style="height:25%"></span><span style="width:25%;max-width:80pt;min-height:10%"></span></div>`)
 	if err != nil {
