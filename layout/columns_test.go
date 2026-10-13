@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -237,6 +238,83 @@ func TestLayout_ColumnBalancingRaisesTargetForUnbreakableUnits(t *testing.T) {
 	target := raiseTargetForLegalBreaks(runs, 15)
 	if target != 30 {
 		t.Errorf("balanced target=%g, want tallest unbreakable unit 30", target)
+	}
+}
+
+func TestLayout_ColumnBalancingRetriesUntilMeasuredShortageIsZero(t *testing.T) {
+	attempts := 0
+	var committed []float64
+	target := retryColumnBalance(40, 100, func(height float64) (float64, func()) {
+		attempts++
+		commit := func() { committed = append(committed, height) }
+		if height < 55 {
+			return 15, commit
+		}
+		return 0, commit
+	})
+	if target != 55 {
+		t.Errorf("balanced target=%g, want 55 from the measured 15pt shortage", target)
+	}
+	if attempts != 2 {
+		t.Errorf("layout attempts=%d, want 2", attempts)
+	}
+	if len(committed) != 1 || committed[0] != 55 {
+		t.Errorf("committed layout attempts=%v, want only the accepted 55pt pass", committed)
+	}
+}
+
+func TestLayout_ColumnBalancingRetriesActualOverflowBeforeCommittingFragments(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><div style="height:20pt;margin:0">A</div><div style="height:20pt;margin:0">B</div><div style="height:20pt;margin:0">C</div><div style="height:20pt;margin:0">D</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	container := root.Children[0]
+	kids := nestedContainerItems(container)
+	opts := testOptions()
+	usable, bottom := opts.PageWidth-opts.left()-opts.right(), opts.pageBottom()
+	gap := 0.0
+	columnWidth := usable / 2
+	layouts := make([]columnItemLayout, len(kids))
+	for index, item := range kids {
+		contentWidth := math.Max(0, columnWidth-horizontalInsets(item))
+		lines := breakInlineStream(buildInlineStream(item, opts), contentWidth, wraps(item))
+		layouts[index] = columnItemLayout{lines: lines, height: usedHeight(item, inlineHeight(lines, item, opts), opts)}
+	}
+	runs := []columnContentRun{{kids: kids, layouts: layouts}}
+	pages := []Page{{Number: 1}}
+	pages[0].emitBlock(PlacedBox{Text: "PREEXISTING"})
+	attempts := 0
+	var acceptedEnd float64
+	initialTarget := layouts[0].height
+	target := retryColumnBalance(initialTarget, initialTarget*4, func(height float64) (float64, func()) {
+		attempts++
+		staged, existingCounts := stageColumnAttemptPages(pages)
+		end, shortage := flowColumnRuns(container, runs, opts.top(), &staged, opts, usable, bottom, 2, gap, columnWidth, height, true)
+		return shortage, func() {
+			mergeColumnAttemptPages(&pages, staged, existingCounts)
+			acceptedEnd = end
+		}
+	})
+	if attempts != 2 || target <= initialTarget {
+		t.Fatalf("actual layout retry: attempts=%d target=%g, want one retry above initial %gpt", attempts, target, initialTarget)
+	}
+	if math.Abs(acceptedEnd-opts.top()-target) > fragmentEpsilon {
+		t.Errorf("accepted content height=%g, want measured target %gpt", acceptedEnd-opts.top(), target)
+	}
+	if got := pages[0].blockCount(); got != 5 {
+		t.Fatalf("committed blocks=%d, want the existing block and 4 accepted blocks", got)
+	}
+	if pages[0].block(0).Text != "PREEXISTING" {
+		t.Errorf("staged retry changed the existing page prefix: %q", pages[0].block(0).Text)
+	}
+	for index := 1; index < pages[0].blockCount(); index++ {
+		block := pages[0].block(index)
+		if index < 3 && block.X != opts.left() {
+			t.Errorf("block %q x=%g, want first column x=%g", block.Text, block.X, opts.left())
+		}
+		if index >= 3 && block.X == opts.left() {
+			t.Errorf("block %q remained in first column after retry", block.Text)
+		}
 	}
 }
 

@@ -7,10 +7,9 @@ import (
 )
 
 type columnItemLayout struct {
-	lines        []inlineStream
-	flowLines    []inlineLine
-	height       float64
-	balanceExtra float64
+	lines     []inlineStream
+	flowLines []inlineLine
+	height    float64
 }
 
 type columnContentRun struct {
@@ -80,6 +79,77 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		target = distributeImplicitColumnBreaks(runs, n)
 		target = raiseTargetForLegalBreaks(runs, target)
 	}
+	if !balance {
+		end, _ := flowColumnRuns(container, runs, y, pages, opts, usable, bottom, n, gap, colW, target, false)
+		return end
+	}
+	maximumTarget := math.Max(target, math.Max(0, bottom-y))
+	var acceptedEnd float64
+	retryColumnBalance(target, maximumTarget, func(candidate float64) (float64, func()) {
+		attemptPages, existingCounts := stageColumnAttemptPages(*pages)
+		end, shortage := flowColumnRuns(container, runs, y, &attemptPages, opts, usable, bottom, n, gap, colW, candidate, true)
+		return shortage, func() {
+			mergeColumnAttemptPages(pages, attemptPages, existingCounts)
+			acceptedEnd = end
+		}
+	})
+	return acceptedEnd
+}
+
+func retryColumnBalance(target, maximumTarget float64, attempt func(float64) (float64, func())) float64 {
+	for {
+		shortage, commit := attempt(target)
+		if shortage <= fragmentEpsilon {
+			commit()
+			return target
+		}
+		next := math.Min(maximumTarget, target+shortage)
+		if next <= target+fragmentEpsilon {
+			commit()
+			return target
+		}
+		target = next
+	}
+}
+
+func stageColumnAttemptPages(pages []Page) ([]Page, []int) {
+	staged := make([]Page, len(pages))
+	existingCounts := make([]int, len(pages))
+	for index, page := range pages {
+		existingCounts[index] = page.blockCount()
+		staged[index] = Page{Number: page.Number, Geometry: page.Geometry}
+		if existingCounts[index] > 0 {
+			// Keep existing pages occupied during the attempt without sharing their fragment nodes.
+			staged[index].fragmentState = &pageFragmentState{
+				paint: make([]*FragmentNode, existingCounts[index]),
+			}
+		}
+	}
+	return staged, existingCounts
+}
+
+func mergeColumnAttemptPages(pages *[]Page, staged []Page, existingCounts []int) {
+	for len(*pages) < len(staged) {
+		*pages = append(*pages, Page{Number: len(*pages) + 1})
+	}
+	for pageIndex := range staged {
+		start := 0
+		if pageIndex < len(existingCounts) {
+			start = existingCounts[pageIndex]
+		}
+		page := &staged[pageIndex]
+		blocks := make([]PlacedBox, 0, page.blockCount()-start)
+		for blockIndex := start; blockIndex < page.blockCount(); blockIndex++ {
+			blocks = append(blocks, *page.block(blockIndex))
+		}
+		for _, block := range blocks {
+			(*pages)[pageIndex].emitBlock(block)
+		}
+	}
+}
+
+func flowColumnRuns(container *boxes.Box, runs []columnContentRun, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64, balance bool) (float64, float64) {
+	shortage := 0.0
 	for _, run := range runs {
 		if run.forcedPage {
 			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
@@ -90,9 +160,13 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		if !balance {
 			runTarget = math.Max(0, bottom-y)
 		}
-		y = flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget)
+		runEnd, runShortage := flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget)
+		y = runEnd
+		if balance {
+			shortage = math.Max(shortage, runShortage)
+		}
 	}
-	return y
+	return y, math.Max(0, shortage)
 }
 
 func splitColumnContentRuns(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []columnContentRun {
@@ -141,7 +215,7 @@ func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int
 	return count
 }
 
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64) float64 {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64) (float64, float64) {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
 	index, lineOffset, end := 0, 0, y
@@ -149,6 +223,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 	continuationFragmentainer := 1
 	previousBottomMargin, hasPreviousItem := 0.0, false
 	rulePage := len(*pages) - 1
+	shortage := math.Inf(1)
 	for col := 0; col < n && index < len(kids); col++ {
 		columnX := opts.left() + float64(col)*(colW+gap)
 		continuationFragmentainer = col + 1
@@ -202,18 +277,14 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				if lineOffset == 0 && len(columnFloats) > 0 {
 					item.flowLines = layoutColumnLinesAroundFloats(it, columnX, colW, yc, columnFloats, len(*pages)-1, opts)
 					item.lines = inlineLineWords(item.flowLines)
-					contentY := yc + it.Style.BorderTop.Width + it.Style.PaddingTop
-					actualHeight := item.flowLines[len(item.flowLines)-1].y + item.flowLines[len(item.flowLines)-1].height - contentY + verticalInsets(it)
-					extra := math.Max(0, actualHeight-item.height)
-					if extra > item.balanceExtra {
-						target += (extra - item.balanceExtra) / float64(n)
-						item.balanceExtra = extra
-					}
 					layouts[index] = item
 				}
 				columnLimit := columnLineLimit(y+target, yc, columnFloats, it, opts)
 				count := linesFittingColumn(item, lineOffset, yc, columnLimit, it, opts)
 				left := len(item.lines) - lineOffset
+				if col == n-1 && count < left && count > 0 {
+					recordColumnShortage(&shortage, columnTextLineOverflow(item, lineOffset, lineOffset+count, yc, columnLimit, it, opts))
+				}
 				if col == n-1 || count > left {
 					count = left
 				}
@@ -228,6 +299,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				if len(item.flowLines) >= lineOffset+count {
 					lastLine := item.flowLines[lineOffset+count-1]
 					h = lastLine.y + lastLine.height - yc + it.Style.BorderBottom.Width + it.Style.PaddingBottom
+				}
+				if col == n-1 && lineOffset+count == len(item.lines) {
+					recordColumnShortage(&shortage, yc+h-(y+target))
 				}
 				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 				breakBefore := fragmentBreakAuto
@@ -271,6 +345,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			h := item.height + marginGap + it.Style.MarginBottom
 			columnLimit := math.Max(y+target, columnBottom)
 			if used > 0 && yc+h > columnLimit+fragmentEpsilon {
+				if col == n-1 {
+					recordColumnShortage(&shortage, yc+h-columnLimit)
+				}
 				break
 			}
 			yc += marginGap
@@ -293,6 +370,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		}
 		if columnBottom > end || yc > end {
 			end = math.Max(columnBottom, yc)
+		}
+		if col == n-1 {
+			recordColumnShortage(&shortage, math.Max(columnBottom, yc)-(y+target))
 		}
 		continuationX, continuationY = columnX, yc
 	}
@@ -327,7 +407,31 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			(*pages)[rulePage].emitBlock(rule)
 		}
 	}
-	return end
+	if math.IsInf(shortage, 1) {
+		shortage = 0
+	}
+	return end, shortage
+}
+
+func recordColumnShortage(shortage *float64, measured float64) {
+	if measured > fragmentEpsilon && measured < *shortage {
+		*shortage = measured
+	}
+}
+
+func columnTextLineOverflow(item columnItemLayout, first, index int, y, limit float64, box *boxes.Box, opts Options) float64 {
+	if index >= len(item.lines) {
+		return 0
+	}
+	if len(item.flowLines) > index {
+		line := item.flowLines[index]
+		return math.Max(0, line.y+line.height-limit)
+	}
+	lineY := y + box.Style.BorderTop.Width + box.Style.PaddingTop
+	for lineIndex := first; lineIndex < index; lineIndex++ {
+		lineY += lineHeightW(item.lines[lineIndex], box, opts)
+	}
+	return math.Max(0, lineY+lineHeightW(item.lines[index], box, opts)-limit)
 }
 
 func distributeImplicitColumnBreaks(runs []columnContentRun, columns int) float64 {
