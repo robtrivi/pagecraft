@@ -218,6 +218,28 @@ func TestLayout_ColumnForcedBreakStartsNewContentRunInFirstColumn(t *testing.T) 
 	}
 }
 
+func TestLayout_ColumnBalancingAssignsImplicitBreaksToTallestContentRun(t *testing.T) {
+	runs := []columnContentRun{{contentHeight: 90}, {contentHeight: 60}, {contentHeight: 30}}
+	target := distributeImplicitColumnBreaks(runs, 4)
+	if runs[0].implicitBreaks != 1 || runs[1].implicitBreaks != 0 || runs[2].implicitBreaks != 0 {
+		t.Errorf("implicit breaks=%d/%d/%d, want 1/0/0", runs[0].implicitBreaks, runs[1].implicitBreaks, runs[2].implicitBreaks)
+	}
+	if target != 60 {
+		t.Errorf("balanced target=%g, want tallest run column height 60", target)
+	}
+}
+
+func TestLayout_ColumnBalancingRaisesTargetForUnbreakableUnits(t *testing.T) {
+	runs := []columnContentRun{{
+		units:          []columnBalanceUnit{{height: 30}, {height: 10}},
+		implicitBreaks: 1,
+	}}
+	target := raiseTargetForLegalBreaks(runs, 15)
+	if target != 30 {
+		t.Errorf("balanced target=%g, want tallest unbreakable unit 30", target)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {

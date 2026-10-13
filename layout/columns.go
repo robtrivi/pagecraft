@@ -14,9 +14,12 @@ type columnItemLayout struct {
 }
 
 type columnContentRun struct {
-	kids       []*boxes.Box
-	layouts    []columnItemLayout
-	forcedPage bool
+	kids           []*boxes.Box
+	layouts        []columnItemLayout
+	units          []columnBalanceUnit
+	contentHeight  float64
+	implicitBreaks int
+	forcedPage     bool
 }
 
 // Column sets flow content into equal-width fragmentainers separated by a gap.
@@ -71,18 +74,28 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		}
 		layouts[index] = columnItemLayout{lines: lines, height: height}
 	}
-	for _, run := range splitColumnContentRuns(kids, layouts) {
+	runs := splitColumnContentRuns(kids, layouts, opts)
+	target := math.Max(0, bottom-y)
+	if balance {
+		target = distributeImplicitColumnBreaks(runs, n)
+		target = raiseTargetForLegalBreaks(runs, target)
+	}
+	for _, run := range runs {
 		if run.forcedPage {
 			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
 			fragment := placeFragmentUnitForPage(fragmentUnit{breakBefore: fragmentBreakPage}, y, opts.top(), bottom, pageHasContent, pages, opts)
 			y = fragment.y
 		}
-		y = flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, balance)
+		runTarget := target
+		if !balance {
+			runTarget = math.Max(0, bottom-y)
+		}
+		y = flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget)
 	}
 	return y
 }
 
-func splitColumnContentRuns(kids []*boxes.Box, layouts []columnItemLayout) []columnContentRun {
+func splitColumnContentRuns(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []columnContentRun {
 	var runs []columnContentRun
 	start := 0
 	for index := 1; index <= len(kids); index++ {
@@ -90,11 +103,16 @@ func splitColumnContentRuns(kids []*boxes.Box, layouts []columnItemLayout) []col
 			continue
 		}
 		if start < index {
-			runs = append(runs, columnContentRun{
+			run := columnContentRun{
 				kids:       kids[start:index],
 				layouts:    layouts[start:index],
 				forcedPage: start > 0,
-			})
+			}
+			run.units = columnBalanceUnits(run.kids, run.layouts, opts)
+			for _, unit := range run.units {
+				run.contentHeight += unit.height
+			}
+			runs = append(runs, run)
 		}
 		start = index
 	}
@@ -123,13 +141,9 @@ func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int
 	return count
 }
 
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW float64, balance bool) float64 {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64) float64 {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
-	target := math.Max(0, bottom-y)
-	if balance {
-		target = balancedColumnHeight(kids, layouts, opts, n)
-	}
 	index, lineOffset, end := 0, 0, y
 	continuationX, continuationY := opts.left(), y
 	continuationFragmentainer := 1
@@ -317,33 +331,89 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 }
 
 type columnBalanceUnit struct {
-	height      float64
-	breakBefore bool
+	height float64
 }
 
-func balancedColumnHeight(kids []*boxes.Box, layouts []columnItemLayout, opts Options, columns int) float64 {
-	units := columnBalanceUnits(kids, layouts, opts)
-	if len(units) == 0 {
+func distributeImplicitColumnBreaks(runs []columnContentRun, columns int) float64 {
+	if len(runs) == 0 {
 		return 0
-	}
-	low, high := 0.0, 0.0
-	for _, unit := range units {
-		low = math.Max(low, unit.height)
-		high += unit.height
 	}
 	if columns < 1 {
 		columns = 1
 	}
-	low = math.Max(low, high/float64(columns))
-	for attempt := 0; attempt < 52 && high-low > fragmentEpsilon; attempt++ {
-		middle := (low + high) / 2
-		if columnBalanceFits(units, middle, columns) {
-			high = middle
-		} else {
-			low = middle
+	// Every forced-break run starts with one column. Assign each remaining
+	// column to the run whose current share is tallest, as Blink does.
+	for found := len(runs); found < columns; found++ {
+		tallest := 0
+		for index := 1; index < len(runs); index++ {
+			if runColumnBlockSize(runs[index]) > runColumnBlockSize(runs[tallest]) {
+				tallest = index
+			}
+		}
+		runs[tallest].implicitBreaks++
+	}
+	tallest := 0.0
+	for _, run := range runs {
+		tallest = math.Max(tallest, runColumnBlockSize(run))
+	}
+	return tallest
+}
+
+func runColumnBlockSize(run columnContentRun) float64 {
+	columns := run.implicitBreaks + 1
+	if columns < 1 {
+		columns = 1
+	}
+	return math.Ceil(run.contentHeight/float64(columns)*64) / 64
+}
+
+func raiseTargetForLegalBreaks(runs []columnContentRun, target float64) float64 {
+	unitCount := 0
+	for _, run := range runs {
+		unitCount += len(run.units)
+		for _, unit := range run.units {
+			target = math.Max(target, unit.height)
 		}
 	}
-	return high
+	for attempt := 0; attempt <= unitCount; attempt++ {
+		shortage := math.Inf(1)
+		for _, run := range runs {
+			allowedColumns := run.implicitBreaks + 1
+			columns, runShortage := columnsRequiredForRun(run.units, target)
+			if columns > allowedColumns {
+				shortage = math.Min(shortage, runShortage)
+			}
+		}
+		if math.IsInf(shortage, 1) || shortage <= fragmentEpsilon {
+			return target
+		}
+		// The unconstrained run estimate can fall between legal breaks. Retry
+		// at the smallest observed shortage until each run fits its allocation.
+		target += shortage
+	}
+	return target
+}
+
+func columnsRequiredForRun(units []columnBalanceUnit, target float64) (int, float64) {
+	if len(units) == 0 {
+		return 0, 0
+	}
+	columns, used, shortage := 1, 0.0, math.Inf(1)
+	for _, unit := range units {
+		if unit.height > target+fragmentEpsilon {
+			shortage = math.Min(shortage, unit.height-target)
+		}
+		if used > 0 && used+unit.height > target+fragmentEpsilon {
+			shortage = math.Min(shortage, used+unit.height-target)
+			columns++
+			used = 0
+		}
+		used += unit.height
+	}
+	if math.IsInf(shortage, 1) {
+		shortage = 0
+	}
+	return columns, shortage
 }
 
 func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []columnBalanceUnit {
@@ -371,34 +441,16 @@ func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Opti
 				if lineIndex == len(layout.lines)-1 {
 					height += item.Style.MarginBottom
 				}
-				units = append(units, columnBalanceUnit{height: height, breakBefore: forcedBefore && lineIndex == 0})
+				units = append(units, columnBalanceUnit{height: height})
 			}
 		} else {
 			gap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, item.Style.MarginTop)
-			units = append(units, columnBalanceUnit{height: layout.height + gap + item.Style.MarginBottom, breakBefore: forcedBefore})
+			units = append(units, columnBalanceUnit{height: layout.height + gap + item.Style.MarginBottom})
 		}
 		previousBottomMargin, hasPreviousItem = item.Style.MarginBottom, true
 		breakPending = item.Style.BreakAfter == boxes.BreakAfterPage
 	}
 	return units
-}
-
-func columnBalanceFits(units []columnBalanceUnit, height float64, maxColumns int) bool {
-	columns, used := 1, 0.0
-	for _, unit := range units {
-		if unit.breakBefore {
-			columns, used = 1, 0
-		}
-		if used > 0 && used+unit.height > height+fragmentEpsilon {
-			columns++
-			used = 0
-		}
-		if columns > maxColumns {
-			return false
-		}
-		used += unit.height
-	}
-	return true
 }
 
 func columnCollapsedMarginGap(previous float64, hasPrevious bool, current float64) float64 {
