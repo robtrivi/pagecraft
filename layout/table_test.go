@@ -240,6 +240,30 @@ func TestLayout_CSSDisplayTableWrapsDirectTextInAnonymousCells(t *testing.T) {
 	}
 }
 
+func TestLayout_TableUsesOnlyTheFirstHeaderAndFooterGroups(t *testing.T) {
+	root, err := boxes.Build(`<div style="display:table"><div style="display:table-header-group"><div style="display:table-row"><span style="display:table-cell">HEAD-1</span></div></div><div style="display:table-header-group"><div style="display:table-row"><span style="display:table-cell">HEAD-2</span></div></div><div style="display:table-footer-group"><div style="display:table-row"><span style="display:table-cell">FOOT-1</span></div></div><div style="display:table-footer-group"><div style="display:table-row"><span style="display:table-cell">FOOT-2</span></div></div><div style="display:table-row"><span style="display:table-cell">BODY</span></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	head, body := tableRows(root.Children[0])
+	if len(head) != 1 {
+		t.Fatalf("header rows=%d, want only the first header group", len(head))
+	}
+	if len(body) != 4 {
+		t.Fatalf("body rows=%d, want later header, body, later footer, and first footer rows", len(body))
+	}
+	if len(tableCells(head[0])) != 1 || tableCells(head[0])[0].Text != "HEAD-1" {
+		t.Errorf("first header row = %#v, want HEAD-1", head[0])
+	}
+	want := []string{"HEAD-2", "FOOT-2", "BODY", "FOOT-1"}
+	for index, row := range body {
+		cells := tableCells(row)
+		if len(cells) != 1 || cells[0].Text != want[index] {
+			t.Errorf("body row %d = %#v, want %s", index, row, want[index])
+		}
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {

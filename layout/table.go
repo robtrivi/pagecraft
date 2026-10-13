@@ -717,6 +717,7 @@ func alignTableSpanContent(span *tableSpanningCell, placedCell *PlacedBox, colla
 // footer groups retain their browser-defined order around the body rows.
 func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 	var foot []*boxes.Box
+	headerGroupSeen, footerGroupSeen := false, false
 	var anonymousChildren []*boxes.Box
 	flushAnonymousRow := func() {
 		if len(anonymousChildren) == 0 {
@@ -732,10 +733,22 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 			body = append(body, c)
 		case c.Tag == "thead" || c.Style.Display == boxes.DisplayTableHeaderGroup:
 			flushAnonymousRow()
-			head = append(head, tableRowsInGroup(c)...)
+			rows := tableRowsInGroup(c)
+			if headerGroupSeen {
+				body = append(body, rows...)
+			} else {
+				head = append(head, rows...)
+				headerGroupSeen = true
+			}
 		case c.Tag == "tfoot" || c.Style.Display == boxes.DisplayTableFooterGroup:
 			flushAnonymousRow()
-			foot = append(foot, tableRowsInGroup(c)...)
+			rows := tableRowsInGroup(c)
+			if footerGroupSeen {
+				body = append(body, rows...)
+			} else {
+				foot = append(foot, rows...)
+				footerGroupSeen = true
+			}
 		case c.Tag == "tbody" || c.Style.Display == boxes.DisplayTableRowGroup:
 			flushAnonymousRow()
 			body = append(body, tableRowsInGroup(c)...)
