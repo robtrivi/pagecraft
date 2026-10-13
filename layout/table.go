@@ -728,7 +728,21 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 		})
 		anonymousCells = nil
 	}
-
+	appendAnonymousCell := func(child *boxes.Box) {
+		cell := &boxes.Box{
+			Tag:      "anonymous-table-cell",
+			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableCell},
+			Parent:   t,
+			Parts:    []boxes.Part{{Child: child}},
+			Children: []*boxes.Box{child},
+		}
+		body = append(body, &boxes.Box{
+			Tag:      "anonymous-table-row",
+			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableRow},
+			Parent:   t,
+			Children: []*boxes.Box{cell},
+		})
+	}
 	for _, c := range t.Children {
 		switch {
 		case isTableCell(c):
@@ -761,6 +775,7 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 			flushAnonymousRow()
 		default:
 			flushAnonymousRow()
+			appendAnonymousCell(c)
 		}
 	}
 	flushAnonymousRow()

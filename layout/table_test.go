@@ -116,6 +116,28 @@ func TestLayout_CSSDisplayTableWrapsDirectCellsInAnAnonymousRow(t *testing.T) {
 	}
 }
 
+func TestLayout_CSSDisplayTableWrapsDirectBlocksInAnonymousCells(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0"><p style="margin:0;padding:0">A</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	for _, block := range Flow(root, opts)[0].Blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				if run.Text == "A" {
+					if block.X != 0 || block.Width != 100 {
+						t.Errorf("anonymous cell geometry x=%g width=%gpt, want 0/100pt", block.X, block.Width)
+					}
+					return
+				}
+			}
+		}
+	}
+	t.Fatal("direct block content was not laid out in an anonymous table cell")
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {
