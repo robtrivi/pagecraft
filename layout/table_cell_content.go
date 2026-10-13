@@ -78,7 +78,7 @@ func tableCellParts(owner *boxes.Box, parts []boxes.Part, width float64, opts Op
 			continue
 		}
 		flushInline()
-		if part.Child.Tag == "table" {
+		if isTableFormattingContext(part.Child) {
 			segments = append(segments, nestedTableCellSegments(part.Child, width, opts)...)
 		} else {
 			segments = append(segments, tableCellBlockSegments(part.Child, width, opts)...)

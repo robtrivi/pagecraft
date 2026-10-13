@@ -634,7 +634,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			floats = append(floats, flowFloat(b, y, &pages, opts, usable, bottom))
 			continue
 		}
-		if b.Tag == "table" {
+		if isTableFormattingContext(b) {
 			gap := blockTopMarginGap(previousBlockMarginBottom, hasPreviousBlock, root.Style.BodyMargin, b.Style.MarginTop)
 			y += gap
 			tableY, tableOpts, tableUsable := placeFormattingContextAroundFloats(b, y, floats, len(pages)-1, opts, usable)
@@ -715,7 +715,7 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 				previousBlockMarginBottom, hasPreviousBlock = it.Style.MarginBottom, true
 				continue
 			}
-			if it.Tag == "table" {
+			if isTableFormattingContext(it) {
 				gap := blockTopMarginGap(previousBlockMarginBottom, hasPreviousBlock, root.Style.BodyMargin, it.Style.MarginTop)
 				y += gap
 				tableY, tableOpts, tableUsable := placeFormattingContextAroundFloats(it, y, floats, len(pages)-1, opts, usable)

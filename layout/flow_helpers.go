@@ -87,7 +87,7 @@ func normalFlowItems(b *boxes.Box) []*boxes.Box {
 		b.Style.HasOpacity || clipsOverflow(b) ||
 		b.Style.PaddingTop != 0 || b.Style.PaddingRight != 0 || b.Style.PaddingBottom != 0 || b.Style.PaddingLeft != 0 ||
 		b.Style.BorderTop.Width != 0 || b.Style.BorderRight.Width != 0 || b.Style.BorderBottom.Width != 0 || b.Style.BorderLeft.Width != 0 ||
-		b.Tag == "table" || b.Tag == "ul" || b.Tag == "ol" || len(b.Children) == 0 {
+		isTableFormattingContext(b) || b.Tag == "ul" || b.Tag == "ol" || len(b.Children) == 0 {
 		return []*boxes.Box{b}
 	}
 	if hasInlineContent(b) && hasBlockChild(b) {
@@ -107,7 +107,7 @@ func normalFlowItems(b *boxes.Box) []*boxes.Box {
 			return []*boxes.Box{b}
 		}
 		if child.Style.Display == boxes.DisplayFlex || child.Style.Display == boxes.DisplayGrid || child.Style.ColCount > 1 ||
-			child.Tag == "table" || child.Tag == "ul" || child.Tag == "ol" {
+			isTableFormattingContext(child) || child.Tag == "ul" || child.Tag == "ol" {
 			items = append(items, child)
 			continue
 		}

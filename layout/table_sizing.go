@@ -106,12 +106,12 @@ func fixedTableColumnDeclarations(table *boxes.Box, grid [][]tableCell, cols int
 
 	column := 0
 	for _, child := range table.Children {
-		if child.Tag != "col" && child.Tag != "colgroup" {
+		if !isTableColumn(child) && !isTableColumnGroup(child) {
 			continue
 		}
-		if child.Tag == "colgroup" && len(child.Children) > 0 {
+		if isTableColumnGroup(child) && len(child.Children) > 0 {
 			for _, col := range child.Children {
-				if col.Tag != "col" {
+				if !isTableColumn(col) {
 					continue
 				}
 				span := max(1, col.Style.TableColumnSpan)
@@ -334,7 +334,7 @@ func tableColumnDeclaredConstraints(table *boxes.Box, grid [][]tableCell, cols i
 	constraints := make([]boxes.CSSDimension, cols)
 	column := 0
 	for _, child := range table.Children {
-		if child.Tag != "col" && child.Tag != "colgroup" {
+		if !isTableColumn(child) && !isTableColumnGroup(child) {
 			continue
 		}
 		assign := func(span int, dimension boxes.CSSDimension) {
@@ -342,9 +342,9 @@ func tableColumnDeclaredConstraints(table *boxes.Box, grid [][]tableCell, cols i
 				constraints[column] = dimension
 			}
 		}
-		if child.Tag == "colgroup" && len(child.Children) > 0 {
+		if isTableColumnGroup(child) && len(child.Children) > 0 {
 			for _, col := range child.Children {
-				if col.Tag != "col" {
+				if !isTableColumn(col) {
 					continue
 				}
 				dimension := col.Style.Sizing.Width

@@ -42,7 +42,7 @@ func intrinsicContribution(box *boxes.Box, opts Options) intrinsicBoxContributio
 // intrinsicContentWidths follows formatting-context boundaries. Consecutive
 // inline parts share a line; block children contribute their own widths.
 func intrinsicContentWidths(box *boxes.Box, opts Options) intrinsicInlineWidths {
-	if box.Tag == "table" {
+	if isTableFormattingContext(box) {
 		return intrinsicTableContentWidths(box, opts)
 	}
 	hasBlockPart := false

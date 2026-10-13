@@ -41,6 +41,42 @@ type tableSpanningCell struct {
 	segments            map[int]int
 }
 
+func isTableFormattingContext(box *boxes.Box) bool {
+	return box != nil && (box.Tag == "table" || box.Style.Display == boxes.DisplayTable)
+}
+
+func isTableRow(box *boxes.Box) bool {
+	return box != nil && (box.Tag == "tr" || box.Style.Display == boxes.DisplayTableRow)
+}
+
+func isTableCell(box *boxes.Box) bool {
+	return box != nil && (box.Tag == "td" || box.Tag == "th" || box.Style.Display == boxes.DisplayTableCell)
+}
+
+func isTableRowGroup(box *boxes.Box) bool {
+	if box == nil {
+		return false
+	}
+	switch box.Tag {
+	case "thead", "tbody", "tfoot":
+		return true
+	}
+	switch box.Style.Display {
+	case boxes.DisplayTableRowGroup, boxes.DisplayTableHeaderGroup, boxes.DisplayTableFooterGroup:
+		return true
+	default:
+		return false
+	}
+}
+
+func isTableColumn(box *boxes.Box) bool {
+	return box != nil && (box.Tag == "col" || box.Style.Display == boxes.DisplayTableColumn)
+}
+
+func isTableColumnGroup(box *boxes.Box) bool {
+	return box != nil && (box.Tag == "colgroup" || box.Style.Display == boxes.DisplayTableColumnGroup)
+}
+
 func tableGridFromRows(rows []*boxes.Box) ([][]tableCell, int) {
 	grid := make([][]tableCell, 0, len(rows))
 	cols := 0
@@ -202,13 +238,13 @@ func tableColumnBorders(table *boxes.Box, cols int) []tableColumnBorderSources {
 	sources := make([]tableColumnBorderSources, cols)
 	column := 0
 	for _, child := range table.Children {
-		if child.Tag != "col" && child.Tag != "colgroup" {
+		if !isTableColumn(child) && !isTableColumnGroup(child) {
 			continue
 		}
-		if child.Tag == "colgroup" && len(child.Children) > 0 {
+		if isTableColumnGroup(child) && len(child.Children) > 0 {
 			start := column
 			for _, col := range child.Children {
-				if col.Tag != "col" {
+				if !isTableColumn(col) {
 					continue
 				}
 				span := max(1, col.Style.TableColumnSpan)
@@ -227,7 +263,7 @@ func tableColumnBorders(table *boxes.Box, cols int) []tableColumnBorderSources {
 		span := max(1, child.Style.TableColumnSpan)
 		start := column
 		for track := 0; track < span && column < cols; track++ {
-			if child.Tag == "colgroup" {
+			if isTableColumnGroup(child) {
 				sources[column] = tableColumnBorderSources{group: child}
 			} else {
 				sources[column] = tableColumnBorderSources{column: child}
@@ -235,7 +271,7 @@ func tableColumnBorders(table *boxes.Box, cols int) []tableColumnBorderSources {
 			column++
 		}
 		end := column - 1
-		if child.Tag == "colgroup" && start < cols && end >= start {
+		if isTableColumnGroup(child) && start < cols && end >= start {
 			sources[start].groupStart = true
 			sources[end].groupEnd = true
 		}
@@ -675,30 +711,30 @@ func alignTableSpanContent(span *tableSpanningCell, placedCell *PlacedBox, colla
 	}
 }
 
-// tableRows returns direct <tr> elements and rows inside thead/tbody/tfoot
-// (the HTML parser inserts tbody even when it is absent from the source).
+// tableRows returns direct table rows and rows inside a row group. Header and
+// footer groups retain their browser-defined order around the body rows.
 func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 	var foot []*boxes.Box
 	for _, c := range t.Children {
-		switch c.Tag {
-		case "tr":
+		switch {
+		case isTableRow(c):
 			body = append(body, c)
-		case "thead":
+		case c.Tag == "thead" || c.Style.Display == boxes.DisplayTableHeaderGroup:
 			for _, r := range c.Children {
-				if r.Tag == "tr" {
+				if isTableRow(r) {
 					head = append(head, r)
 				}
 			}
-		case "tbody":
+		case c.Tag == "tfoot" || c.Style.Display == boxes.DisplayTableFooterGroup:
 			for _, r := range c.Children {
-				if r.Tag == "tr" {
-					body = append(body, r)
+				if isTableRow(r) {
+					foot = append(foot, r)
 				}
 			}
-		case "tfoot":
+		case c.Tag == "tbody" || c.Style.Display == boxes.DisplayTableRowGroup:
 			for _, r := range c.Children {
-				if r.Tag == "tr" {
-					foot = append(foot, r)
+				if isTableRow(r) {
+					body = append(body, r)
 				}
 			}
 		}
@@ -709,7 +745,7 @@ func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 func tableCells(r *boxes.Box) []*boxes.Box {
 	var cells []*boxes.Box
 	for _, c := range r.Children {
-		if c.Tag == "td" || c.Tag == "th" {
+		if isTableCell(c) {
 			cells = append(cells, c)
 		}
 	}
@@ -720,12 +756,10 @@ func tableRowGroup(row *boxes.Box) *boxes.Box {
 	if row == nil || row.Parent == nil {
 		return nil
 	}
-	switch row.Parent.Tag {
-	case "thead", "tbody", "tfoot":
+	if isTableRowGroup(row.Parent) {
 		return row.Parent
-	default:
-		return nil
 	}
+	return nil
 }
 
 func applyTablePaint(block *PlacedBox, cell tableDoneCell, x, width, y, height float64,

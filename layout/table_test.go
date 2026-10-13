@@ -68,6 +68,30 @@ func TestLayout_SimpleTable_RendersRows(t *testing.T) {
 	}
 }
 
+func TestLayout_CSSDisplayTableLaysOutRowsAndCells(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}td{padding:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0"><div style="display:table-row"><div style="display:table-cell;width:40pt;padding:0">A</div><div style="display:table-cell;padding:0">B</div></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("table cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if left.Width != 40 || right.Width != 60 || right.X != 40 {
+		t.Errorf("table-cell geometry: left=(x %g,w %g), right=(x %g,w %g); want (0,40) and (40,60)", left.X, left.Width, right.X, right.Width)
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {

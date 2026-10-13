@@ -138,7 +138,7 @@ func isKeepable(b *boxes.Box) bool {
 	if b.Style.Display == boxes.DisplayFlex || b.Style.Display == boxes.DisplayGrid || b.Style.ColCount > 1 {
 		return false
 	}
-	return b.Tag != "table" && b.Tag != "ul" && b.Tag != "ol"
+	return !isTableFormattingContext(b) && b.Tag != "ul" && b.Tag != "ol"
 }
 
 // floatsOnPage filters floats on the current page; v1 does not carry them across pages.
