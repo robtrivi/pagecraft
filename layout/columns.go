@@ -227,7 +227,11 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 	continuationX, continuationY := opts.left(), y
 	continuationFragmentainer := 1
 	previousBottomMargin, hasPreviousItem := 0.0, false
-	rulePage := len(*pages) - 1
+	firstPage := len(*pages) - 1
+	pageBlockStarts := make([]int, len(*pages))
+	for pageIndex := range *pages {
+		pageBlockStarts[pageIndex] = (*pages)[pageIndex].blockCount()
+	}
 	shortage := math.Inf(1)
 	for col := 0; col < n && index < len(kids); col++ {
 		columnX := opts.left() + float64(col)*(colW+gap)
@@ -405,11 +409,34 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		}
 	}
 	if container.Style.ColumnRuleWidth > 0 && gap > 0 {
-		for col := 0; col < n-1; col++ {
-			x := opts.left() + float64(col+1)*colW + float64(col)*gap + (gap-container.Style.ColumnRuleWidth)/2
-			rule := PlacedBox{X: x, Y: y, Height: end - y}
-			rule.BorderLeft = boxes.BorderSide{Width: container.Style.ColumnRuleWidth, Color: container.Style.ColumnRuleColor}
-			(*pages)[rulePage].emitBlock(rule)
+		for pageIndex := firstPage; pageIndex < len(*pages); pageIndex++ {
+			page := &(*pages)[pageIndex]
+			startBlock := 0
+			if pageIndex < len(pageBlockStarts) {
+				startBlock = pageBlockStarts[pageIndex]
+			}
+			if startBlock == page.blockCount() {
+				continue
+			}
+			pageOpts := opts
+			if len(opts.PageRules) != 0 {
+				pageOpts = opts.forPage(pageIndex + 1)
+			}
+			ruleTop := y
+			if pageIndex != firstPage {
+				ruleTop = pageOpts.top()
+			}
+			ruleBottom := ruleTop
+			for blockIndex := startBlock; blockIndex < page.blockCount(); blockIndex++ {
+				block := page.block(blockIndex)
+				ruleBottom = math.Max(ruleBottom, block.Y+block.Height)
+			}
+			for col := 0; col < n-1; col++ {
+				x := pageOpts.left() + float64(col+1)*colW + float64(col)*gap + (gap-container.Style.ColumnRuleWidth)/2
+				rule := PlacedBox{X: x, Y: ruleTop, Height: ruleBottom - ruleTop}
+				rule.BorderLeft = boxes.BorderSide{Width: container.Style.ColumnRuleWidth, Color: container.Style.ColumnRuleColor}
+				page.emitBlock(rule)
+			}
 		}
 	}
 	if math.IsInf(shortage, 1) {

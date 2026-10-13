@@ -463,6 +463,33 @@ func TestLayout_Columns_DrawsRulesInGaps(t *testing.T) {
 	}
 }
 
+func TestLayout_Columns_DrawsRulesForEachPageFragment(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:18pt;column-rule:1pt solid #cbd5e1"><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">A</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">B</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">C</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">D</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">E</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">F</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 60, 0
+	pages := Flow(root, opts)
+	if len(pages) < 2 {
+		t.Fatalf("pages=%d, want column content to continue on another page", len(pages))
+	}
+	for pageIndex, page := range pages {
+		rules := 0
+		for _, block := range page.Blocks {
+			if block.BorderLeft.Width == 1 && block.BorderLeft.Color == [4]float64{203.0 / 255, 213.0 / 255, 225.0 / 255, 1} {
+				rules++
+				if block.Height > 60 {
+					t.Errorf("page %d rule height=%g exceeds its 60pt page", pageIndex+1, block.Height)
+				}
+			}
+		}
+		if rules != 1 {
+			t.Errorf("page %d rules=%d, want 1", pageIndex+1, rules)
+		}
+	}
+}
+
 func TestLayout_ColumnsBalancesItemsByHeight(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0;font-size:30pt">Tall</p><p style="margin:0;font-size:10pt">Short A</p><p style="margin:0;font-size:10pt">Short B</p></div>`)
 	if err != nil {
