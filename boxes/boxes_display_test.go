@@ -14,3 +14,16 @@ func TestBoxes_DisplayNone_RemovesElementFromBoxTree(t *testing.T) {
 		t.Errorf("visible text = %q, %q; want before, after", root.Children[0].Text, root.Children[1].Text)
 	}
 }
+
+func TestBoxes_ParsesCSSDisplayTableRoles(t *testing.T) {
+	root, err := Build(`<div style="display:table"><div style="display:table-row"><span style="display:table-cell">A</span></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	table := root.Children[0]
+	row := table.Children[0]
+	cell := row.Children[0]
+	if table.Style.Display != DisplayTable || row.Style.Display != DisplayTableRow || cell.Style.Display != DisplayTableCell {
+		t.Fatalf("display roles = %q/%q/%q, want table/table-row/table-cell", table.Style.Display, row.Style.Display, cell.Style.Display)
+	}
+}

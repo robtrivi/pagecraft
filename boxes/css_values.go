@@ -9,6 +9,24 @@ import (
 
 func defaultDisplay(tag string) Display {
 	switch tag {
+	case "table":
+		return DisplayTable
+	case "thead":
+		return DisplayTableHeaderGroup
+	case "tbody":
+		return DisplayTableRowGroup
+	case "tfoot":
+		return DisplayTableFooterGroup
+	case "tr":
+		return DisplayTableRow
+	case "colgroup":
+		return DisplayTableColumnGroup
+	case "col":
+		return DisplayTableColumn
+	case "td", "th":
+		return DisplayTableCell
+	case "caption":
+		return DisplayTableCaption
 	case "span", "a", "b", "i", "em", "strong", "small", "code", "img", "of-the", "s", "strike", "sub", "sup", "u":
 		return DisplayInline
 	default:

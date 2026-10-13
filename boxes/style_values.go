@@ -9,11 +9,21 @@ import (
 type Display string
 
 const (
-	DisplayNone   Display = "none"
-	DisplayBlock  Display = "block"
-	DisplayInline Display = "inline"
-	DisplayFlex   Display = "flex"
-	DisplayGrid   Display = "grid"
+	DisplayNone             Display = "none"
+	DisplayBlock            Display = "block"
+	DisplayInline           Display = "inline"
+	DisplayFlex             Display = "flex"
+	DisplayGrid             Display = "grid"
+	DisplayTable            Display = "table"
+	DisplayInlineTable      Display = "inline-table"
+	DisplayTableRowGroup    Display = "table-row-group"
+	DisplayTableHeaderGroup Display = "table-header-group"
+	DisplayTableFooterGroup Display = "table-footer-group"
+	DisplayTableRow         Display = "table-row"
+	DisplayTableColumnGroup Display = "table-column-group"
+	DisplayTableColumn      Display = "table-column"
+	DisplayTableCell        Display = "table-cell"
+	DisplayTableCaption     Display = "table-caption"
 )
 
 // Position is the computed CSS positioning mode. Its zero value represents static flow.
@@ -170,6 +180,26 @@ const (
 
 func parseDisplay(value string) (Display, bool) {
 	switch value {
+	case "table":
+		return DisplayTable, true
+	case "inline-table":
+		return DisplayInlineTable, true
+	case "table-row-group":
+		return DisplayTableRowGroup, true
+	case "table-header-group":
+		return DisplayTableHeaderGroup, true
+	case "table-footer-group":
+		return DisplayTableFooterGroup, true
+	case "table-row":
+		return DisplayTableRow, true
+	case "table-column-group":
+		return DisplayTableColumnGroup, true
+	case "table-column":
+		return DisplayTableColumn, true
+	case "table-cell":
+		return DisplayTableCell, true
+	case "table-caption":
+		return DisplayTableCaption, true
 	case "none":
 		return DisplayNone, true
 	case "block":
