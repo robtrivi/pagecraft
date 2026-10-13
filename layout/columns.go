@@ -436,11 +436,18 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				ruleTop = pageOpts.top()
 			}
 			ruleBottom := ruleTop
+			occupiedColumns := make([]bool, n)
 			for blockIndex := startBlock; blockIndex < page.blockCount(); blockIndex++ {
 				block := page.block(blockIndex)
 				ruleBottom = math.Max(ruleBottom, block.Y+block.Height)
+				if block.FragmentainerIndex > 0 && block.FragmentainerIndex <= n {
+					occupiedColumns[block.FragmentainerIndex-1] = true
+				}
 			}
 			for col := 0; col < n-1; col++ {
+				if !occupiedColumns[col] || !occupiedColumns[col+1] {
+					continue
+				}
 				x := pageOpts.left() + float64(col+1)*colW + float64(col)*gap + (gap-container.Style.ColumnRuleWidth)/2
 				rule := PlacedBox{X: x, Y: ruleTop, Height: ruleBottom - ruleTop}
 				rule.BorderLeft = boxes.BorderSide{Width: container.Style.ColumnRuleWidth, Color: container.Style.ColumnRuleColor}

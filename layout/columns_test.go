@@ -463,6 +463,19 @@ func TestLayout_Columns_DrawsRulesInGaps(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnsOmitsRuleBesideEmptyColumn(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:18pt;column-rule:1pt solid #cbd5e1"><p style="margin:0">ONLY FIRST COLUMN</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	for _, block := range blocks {
+		if block.BorderLeft.Width == 1 && block.BorderLeft.Color == [4]float64{203.0 / 255, 213.0 / 255, 225.0 / 255, 1} {
+			t.Fatalf("rule at x=%g was drawn although the adjacent column is empty", block.X)
+		}
+	}
+}
+
 func TestLayout_Columns_DrawsRulesForEachPageFragment(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;column-gap:18pt;column-rule:1pt solid #cbd5e1"><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">A</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">B</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">C</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">D</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">E</p><p style="margin:0;padding:1pt 0;font:1pt/20pt Helvetica">F</p></div>`)
 	if err != nil {
@@ -476,7 +489,11 @@ func TestLayout_Columns_DrawsRulesForEachPageFragment(t *testing.T) {
 	}
 	for pageIndex, page := range pages {
 		rules := 0
+		occupied := [2]bool{}
 		for _, block := range page.Blocks {
+			if block.FragmentainerIndex > 0 && block.FragmentainerIndex <= len(occupied) {
+				occupied[block.FragmentainerIndex-1] = true
+			}
 			if block.BorderLeft.Width == 1 && block.BorderLeft.Color == [4]float64{203.0 / 255, 213.0 / 255, 225.0 / 255, 1} {
 				rules++
 				if block.Height > 60 {
@@ -484,8 +501,12 @@ func TestLayout_Columns_DrawsRulesForEachPageFragment(t *testing.T) {
 				}
 			}
 		}
-		if rules != 1 {
-			t.Errorf("page %d rules=%d, want 1", pageIndex+1, rules)
+		wantRules := 0
+		if occupied[0] && occupied[1] {
+			wantRules = 1
+		}
+		if rules != wantRules {
+			t.Errorf("page %d rules=%d, want %d for occupied columns %v", pageIndex+1, rules, wantRules, occupied)
 		}
 	}
 }
