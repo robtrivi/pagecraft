@@ -1171,3 +1171,50 @@ func TestLayout_TablePaintLayersRetainStructuralBorders(t *testing.T) {
 		}
 	}
 }
+
+func TestLayout_CollapsedTableEdgesResolveCellBeforeStructuralTies(t *testing.T) {
+	root, err := boxes.Build(`<style>table{border-collapse:collapse}.row{border-top:2pt solid red}td{border-top:2pt solid blue}</style><table><tr class="row"><td>TOTAL</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var total *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		if block.Text == "TOTAL" {
+			total = &block
+			break
+		}
+	}
+	if total == nil {
+		t.Fatal("total cell not found")
+	}
+	if total.BorderTop.Width != 1 {
+		t.Errorf("painted top half width=%g, want 1pt", total.BorderTop.Width)
+	}
+	if total.BorderTop.Color[2] != 1 || total.BorderTop.Color[0] != 0 {
+		t.Errorf("equal-width collapsed border color=%v, want cell blue", total.BorderTop.Color)
+	}
+}
+
+func TestLayout_CollapsedTableSharedCellEdgeUsesWiderCandidate(t *testing.T) {
+	root, err := boxes.Build(`<style>table{border-collapse:collapse}td:first-child{border-right:2pt solid red}td:last-child{border-left:3pt solid blue}</style><table><tr><td>LEFT</td><td>RIGHT</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var left, right *PlacedBox
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		switch block.Text {
+		case "LEFT":
+			left = &block
+		case "RIGHT":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("cells not found: left=%v right=%v", left != nil, right != nil)
+	}
+	for name, side := range map[string]boxes.BorderSide{"left cell": left.BorderRight, "right cell": right.BorderLeft} {
+		if side.Width != 1.5 || side.Color[2] != 1 {
+			t.Errorf("%s shared edge=%+v, want 1.5pt blue half", name, side)
+		}
+	}
+}

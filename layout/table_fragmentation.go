@@ -226,6 +226,7 @@ func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowH
 	for _, width := range colWidths {
 		tableWidth += width
 	}
+	collapsedBorders := resolveCollapsedRowBorders(cells)
 	for index, cell := range cells {
 		lines := cell.lines[ranges[index].first:ranges[index].end]
 		style := fragmentBox(cell.b, firstFragment, lastFragment)
@@ -242,6 +243,9 @@ func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowH
 		contentWidth := max(0, width-horizontalInsets(style))
 		text := inlineFragmentText(tableCellWords(lines))
 		placedCell := placed(style, text, nil, x, y, width, rowHeight, cell.fs, font)
+		if collapsed {
+			applyCollapsedCellBorders(&placedCell, collapsedBorders[index])
+		}
 		applyTablePaint(&placedCell, cell, tableX, tableWidth, y, rowHeight, firstFragment, lastFragment, repeated, index == 0, index == len(cells)-1, collapsed, opts)
 		placedCell.source = cell.b
 		placedCell = fragmentPlacedBox(placedCell, firstFragment, lastFragment)

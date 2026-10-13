@@ -80,6 +80,18 @@ func TestRender_TableStructuralBordersPaintInSeparateMode(t *testing.T) {
 	}
 }
 
+func TestRender_CollapsedTableRowBorderPaintsAcrossCells(t *testing.T) {
+	pdf, err := RenderHTMLToPDF(`<style>table{border-collapse:collapse} .grand{border-top:2px solid #b6cf58}</style><table><tr><td>LEFT</td><td>RIGHT</td></tr><tr class="grand"><td>TOTAL</td><td>333.50</td></tr></table>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	green := "0.7137254901960784 0.8117647058823529 0.34509803921568627 rg"
+	if count := strings.Count(content, green); count != 2 {
+		t.Fatalf("collapsed row border segments=%d, want one painted segment for each cell; content stream:\n%s", count, content)
+	}
+}
+
 func TestRender_RepeatedHeaderKeepsItsPaintLayers(t *testing.T) {
 	var body strings.Builder
 	body.WriteString(`<table style="margin:0"><thead style="background:#163b64;color:white"><tr><th>REPEATED HEADER</th></tr></thead><tbody>`)

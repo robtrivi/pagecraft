@@ -66,6 +66,75 @@ func tableCellBorderInsets(cell *boxes.Box, collapsed bool) (top, right, bottom,
 		cell.Style.BorderBottom.Width * factor, cell.Style.BorderLeft.Width * factor
 }
 
+type collapsedTableCellBorders struct {
+	top, right, bottom, left boxes.BorderSide
+}
+
+// collapsedCellBorderCandidates collects the borders that can contribute to
+// one cell's grid edges. Row, group, and table vertical borders only apply at
+// the outside of the row; their horizontal borders span every cell.
+func collapsedCellBorderCandidates(cell, row, group, table *boxes.Box, firstCell, lastCell bool) collapsedTableCellBorders {
+	style := func(box *boxes.Box) boxes.ComputedStyle {
+		if box == nil {
+			return boxes.ComputedStyle{}
+		}
+		return box.Style
+	}
+	cellStyle, rowStyle, groupStyle, tableStyle := style(cell), style(row), style(group), style(table)
+	resolve := func(sides ...boxes.BorderSide) boxes.BorderSide {
+		winner := boxes.BorderSide{}
+		for _, side := range sides {
+			if side.Width > winner.Width {
+				winner = side
+			}
+		}
+		return winner
+	}
+	result := collapsedTableCellBorders{
+		top:    resolve(cellStyle.BorderTop, rowStyle.BorderTop, groupStyle.BorderTop, tableStyle.BorderTop),
+		right:  resolve(cellStyle.BorderRight),
+		bottom: resolve(cellStyle.BorderBottom, rowStyle.BorderBottom, groupStyle.BorderBottom, tableStyle.BorderBottom),
+		left:   resolve(cellStyle.BorderLeft),
+	}
+	if lastCell {
+		result.right = resolve(cellStyle.BorderRight, rowStyle.BorderRight, groupStyle.BorderRight, tableStyle.BorderRight)
+	}
+	if firstCell {
+		result.left = resolve(cellStyle.BorderLeft, rowStyle.BorderLeft, groupStyle.BorderLeft, tableStyle.BorderLeft)
+	}
+	return result
+}
+
+func resolveCollapsedRowBorders(cells []tableDoneCell) []collapsedTableCellBorders {
+	resolved := make([]collapsedTableCellBorders, len(cells))
+	for index, cell := range cells {
+		resolved[index] = collapsedCellBorderCandidates(cell.b, cell.row, cell.group, cell.table, index == 0, index == len(cells)-1)
+	}
+	for index := 1; index < len(cells); index++ {
+		left, right := cells[index-1], cells[index]
+		if left.col+left.span != right.col {
+			continue
+		}
+		winner := resolved[index-1].right
+		if resolved[index].left.Width > winner.Width {
+			winner = resolved[index].left
+		}
+		resolved[index-1].right, resolved[index].left = winner, winner
+	}
+	for index := range resolved {
+		resolved[index].top.Width *= 0.5
+		resolved[index].right.Width *= 0.5
+		resolved[index].bottom.Width *= 0.5
+		resolved[index].left.Width *= 0.5
+	}
+	return resolved
+}
+
+func applyCollapsedCellBorders(block *PlacedBox, borders collapsedTableCellBorders) {
+	block.BorderWidth = 0
+	block.BorderTop, block.BorderRight, block.BorderBottom, block.BorderLeft = borders.top, borders.right, borders.bottom, borders.left
+}
+
 // flowTable lays out t's rows from and and returns the resulting cursor.
 func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
 	head, body := tableRows(t)
@@ -106,9 +175,13 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 	canRepeat := len(head) > 0
 	placeCells := func(done []tableDoneCell, rh, y float64, repeated bool) float64 {
 		p := &(*pages)[len(*pages)-1]
+		collapsedBorders := resolveCollapsedRowBorders(done)
 		for cellIndex, d := range done {
 			pb := placed(d.b, d.b.Text,
 				nil, tableX+colX[d.col], y, cellW(d.col, d.span), rh, d.fs, d.font)
+			if t.Style.BorderCollapse {
+				applyCollapsedCellBorders(&pb, collapsedBorders[cellIndex])
+			}
 			applyTablePaint(&pb, d, tableX, tableWidth, y, rh, true, true, repeated, cellIndex == 0, cellIndex == len(done)-1, t.Style.BorderCollapse, opts)
 			contentH := tableCellAllContentHeight(d, opts) + d.b.Style.PaddingTop + d.b.Style.PaddingBottom
 			borderTop, _, borderBottom, borderLeft := tableCellBorderInsets(d.b, t.Style.BorderCollapse)
