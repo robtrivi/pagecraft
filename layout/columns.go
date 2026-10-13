@@ -16,7 +16,7 @@ type columnItemLayout struct {
 type columnContentRun struct {
 	kids           []*boxes.Box
 	layouts        []columnItemLayout
-	units          []columnBalanceUnit
+	units          []fragmentUnit
 	contentHeight  float64
 	implicitBreaks int
 	forcedPage     bool
@@ -330,11 +330,6 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 	return end
 }
 
-type columnBalanceUnit struct {
-	height float64
-	group  int
-}
-
 func distributeImplicitColumnBreaks(runs []columnContentRun, columns int) float64 {
 	if len(runs) == 0 {
 		return 0
@@ -395,7 +390,7 @@ func raiseTargetForLegalBreaks(runs []columnContentRun, target float64) float64 
 	return target
 }
 
-func columnsRequiredForRun(units []columnBalanceUnit, target float64) (int, float64) {
+func columnsRequiredForRun(units []fragmentUnit, target float64) (int, float64) {
 	if len(units) == 0 {
 		return 0, 0
 	}
@@ -403,11 +398,10 @@ func columnsRequiredForRun(units []columnBalanceUnit, target float64) (int, floa
 	for index := 0; index < len(units); {
 		unit := units[index]
 		end, height := index+1, unit.height
-		if unit.group != 0 {
-			for end < len(units) && units[end].group == unit.group {
-				height += units[end].height
-				end++
-			}
+		groupStart, groupEnd, keep := keepRange(units, index)
+		if keep && groupStart == index {
+			end = groupEnd
+			height = measureFragmentRange(units, index, end, nil)
 		}
 		if height > target+fragmentEpsilon {
 			shortage = math.Min(shortage, height-target)
@@ -426,26 +420,36 @@ func columnsRequiredForRun(units []columnBalanceUnit, target float64) (int, floa
 	return columns, shortage
 }
 
-func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []columnBalanceUnit {
-	var units []columnBalanceUnit
+func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Options) []fragmentUnit {
+	var units []fragmentUnit
 	previousBottomMargin, hasPreviousItem := 0.0, false
 	breakPending := false
-	nextGroup, pendingGroup := 1, 0
+	nextGroup := 1
 	for index, item := range kids {
 		forcedBefore := pageBreakValue(item.Style.BreakBefore) == fragmentBreakPage ||
 			(index > 0 && forcedPageBreakBetween(kids[index-1], item)) || breakPending
 		if forcedBefore {
 			previousBottomMargin, hasPreviousItem = 0, false
-			pendingGroup = 0
 		}
 		if item.Style.Float != boxes.FloatNone {
 			previousBottomMargin, hasPreviousItem = 0, false
-			pendingGroup = 0
 			breakPending = item.Style.BreakAfter == boxes.BreakAfterPage
 			continue
 		}
 		layout := layouts[index]
-		itemStart := len(units)
+		group := 0
+		if item.Style.BreakInside == boxes.BreakInsideAvoid {
+			group = nextGroup
+			nextGroup++
+		}
+		breakBefore := pageBreakValue(item.Style.BreakBefore)
+		breakAfter := fragmentBreakAuto
+		switch item.Style.BreakAfter {
+		case boxes.BreakAfterAvoid:
+			breakAfter = fragmentBreakAvoid
+		case boxes.BreakAfterPage:
+			breakAfter = fragmentBreakPage
+		}
 		if columnTextCanSplit(item) && len(layout.lines) > 0 {
 			for lineIndex, line := range layout.lines {
 				height := lineHeightW(line, item, opts)
@@ -455,32 +459,25 @@ func columnBalanceUnits(kids []*boxes.Box, layouts []columnItemLayout, opts Opti
 				if lineIndex == len(layout.lines)-1 {
 					height += item.Style.MarginBottom
 				}
-				units = append(units, columnBalanceUnit{height: height})
+				unit := fragmentUnit{height: height}
+				if lineIndex == 0 {
+					unit.breakBefore = breakBefore
+				}
+				if lineIndex == len(layout.lines)-1 {
+					unit.breakAfter = breakAfter
+				}
+				if group != 0 {
+					unit.group, unit.breakInsideAvoid = group, true
+				}
+				units = append(units, unit)
 			}
 		} else {
 			gap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, item.Style.MarginTop)
-			units = append(units, columnBalanceUnit{height: layout.height + gap + item.Style.MarginBottom})
-		}
-		if item.Style.BreakInside == boxes.BreakInsideAvoid {
-			if pendingGroup == 0 {
-				pendingGroup = nextGroup
-				nextGroup++
-			}
-			for unit := itemStart; unit < len(units); unit++ {
-				units[unit].group = pendingGroup
-			}
-		} else if pendingGroup != 0 && itemStart < len(units) {
-			units[itemStart].group = pendingGroup
-			pendingGroup = 0
-		}
-		if item.Style.BreakAfter == boxes.BreakAfterAvoid && itemStart < len(units) {
-			if pendingGroup == 0 {
-				pendingGroup = nextGroup
-				nextGroup++
-			}
-			units[len(units)-1].group = pendingGroup
-		} else {
-			pendingGroup = 0
+			units = append(units, fragmentUnit{
+				height: layout.height + gap + item.Style.MarginBottom,
+				group:  group, breakInsideAvoid: group != 0,
+				breakBefore: breakBefore, breakAfter: breakAfter,
+			})
 		}
 		previousBottomMargin, hasPreviousItem = item.Style.MarginBottom, true
 		breakPending = item.Style.BreakAfter == boxes.BreakAfterPage

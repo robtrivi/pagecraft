@@ -32,6 +32,16 @@ func TestBoxes_ComputedBreakAfterNormalizesModernAndLegacyAvoid(t *testing.T) {
 	}
 }
 
+func TestBoxes_ComputedBreakBeforePreservesAvoidValue(t *testing.T) {
+	root, err := Build(`<p style="break-before:avoid">x</p>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := root.Children[0].Style.BreakBefore; got != BreakBeforeAvoid {
+		t.Errorf("BreakBefore=%q, want %q", got, BreakBeforeAvoid)
+	}
+}
+
 func TestBoxes_ParsesBreakInsideAvoid(t *testing.T) {
 	cases := []struct {
 		name, property string

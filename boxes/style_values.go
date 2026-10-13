@@ -95,7 +95,7 @@ type FlexBasis struct {
 	Value float64
 }
 
-// BreakBeforeMode selects the supported forced page break before a box.
+// BreakBeforeMode selects the supported break behavior before a box.
 type BreakBeforeMode string
 
 // BreakAfterMode selects the supported forced page break after a box.
@@ -160,8 +160,9 @@ const (
 )
 
 const (
-	BreakBeforeAuto BreakBeforeMode = ""
-	BreakBeforePage BreakBeforeMode = "page"
+	BreakBeforeAuto  BreakBeforeMode = ""
+	BreakBeforeAvoid BreakBeforeMode = "avoid"
+	BreakBeforePage  BreakBeforeMode = "page"
 )
 
 const (
@@ -348,6 +349,8 @@ func parseBreakBefore(value string) (BreakBeforeMode, bool) {
 	switch value {
 	case "page", "always":
 		return BreakBeforePage, true
+	case "avoid", "avoid-page":
+		return BreakBeforeAvoid, true
 	default:
 		return BreakBeforeAuto, false
 	}

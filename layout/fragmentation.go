@@ -25,10 +25,14 @@ type fragmentUnit struct {
 }
 
 func pageBreakValue(value boxes.BreakBeforeMode) fragmentBreak {
-	if value == boxes.BreakBeforePage {
+	switch value {
+	case boxes.BreakBeforeAvoid:
+		return fragmentBreakAvoid
+	case boxes.BreakBeforePage:
 		return fragmentBreakPage
+	default:
+		return fragmentBreakAuto
 	}
-	return fragmentBreakAuto
 }
 
 // forcedPageBreakBetween resolves the supported forced page-break values at a
