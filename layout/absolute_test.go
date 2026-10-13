@@ -6,10 +6,8 @@ import (
 	"github.com/robtrivi/pagecraft/boxes"
 )
 
-// Position absolute content at offsets from the page content origin.
-// with top/left in px uses content-box coordinates without moving the flow
-// cursor. Nested containing blocks are not supported (the page is always the containing block).
-func TestLayout_Absolute_PlacesAtCoordinates(t *testing.T) {
+// Top and left offsets on a page-level absolute box use the page content origin.
+func TestLayout_AbsoluteTopLeftOffsetsUsePageContentOrigin(t *testing.T) {
 	root, err := boxes.Build(`<div style="position: absolute; top: 100px; left: 50px">Stamp</div><p style="margin: 0">Text</p>`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -84,6 +82,23 @@ func TestLayout_AbsoluteRightAndWidthUseRelativeContainingBlock(t *testing.T) {
 	if following == nil || following.Y < 204 {
 		t.Errorf("following flow: got %+v, want and >= 204pt", following)
 	}
+}
+
+func TestLayout_AbsoluteBottomUsesPositionedAncestorHeight(t *testing.T) {
+	root, err := boxes.Build(`<div style="position:relative;width:100pt;height:100pt;margin:0"><div style="position:absolute;left:0;bottom:10pt;width:30pt;height:20pt">Stamp</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	pages := Flow(root, testOptions())
+	for _, block := range pages[0].Blocks {
+		if block.Text == "Stamp" {
+			if block.Y != 142 {
+				t.Errorf("absolute bottom position y=%gpt, want 142pt", block.Y)
+			}
+			return
+		}
+	}
+	t.Fatal("absolute positioned content not found")
 }
 
 func TestLayout_AbsolutePercentageWidthResolvesAgainstContainingBlock(t *testing.T) {

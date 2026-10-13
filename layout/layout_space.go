@@ -3,24 +3,25 @@ package layout
 // layoutSpace carries geometric state for one layout invocation. Services and
 // document-wide configuration remain in Options; nested flows derive a value.
 type layoutSpace struct {
-	pageMargin              float64 // legacy scalar retained for old internal callers
-	pageMarginLeft          float64
-	pageMarginRight         float64
-	pageMarginTop           float64
-	pageMarginBottom        float64
-	pageMarginSet           bool
-	bodyMargin              float64
-	containingSize          sizeContext
-	startY                  float64
-	startYSet               bool
-	marginLeft              float64
-	marginRight             float64
-	marginTop               float64
-	marginBottom            float64
-	absoluteOriginX         float64
-	absoluteOriginY         float64
-	absoluteOriginSet       bool
-	absoluteContainingWidth float64
+	pageMargin               float64 // legacy scalar retained for old internal callers
+	pageMarginLeft           float64
+	pageMarginRight          float64
+	pageMarginTop            float64
+	pageMarginBottom         float64
+	pageMarginSet            bool
+	bodyMargin               float64
+	containingSize           sizeContext
+	startY                   float64
+	startYSet                bool
+	marginLeft               float64
+	marginRight              float64
+	marginTop                float64
+	marginBottom             float64
+	absoluteOriginX          float64
+	absoluteOriginY          float64
+	absoluteOriginSet        bool
+	absoluteContainingWidth  float64
+	absoluteContainingHeight float64
 }
 
 func (space layoutSpace) withContainingBlock(size sizeContext) layoutSpace {
@@ -63,10 +64,11 @@ func (space layoutSpace) withBodyMargin(margin float64) layoutSpace {
 	return space
 }
 
-func (space layoutSpace) withAbsoluteContainingBlock(x, y, width float64) layoutSpace {
+func (space layoutSpace) withAbsoluteContainingBlock(x, y, width, height float64) layoutSpace {
 	space.absoluteOriginX = x
 	space.absoluteOriginY = y
 	space.absoluteOriginSet = true
 	space.absoluteContainingWidth = width
+	space.absoluteContainingHeight = height
 	return space
 }

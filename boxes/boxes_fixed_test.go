@@ -53,3 +53,13 @@ func TestBoxes_ParsesPositionedDimensionsAndRight(t *testing.T) {
 		t.Errorf("dimensions: got %vx%v, want 130x60 pt", b.Style.Sizing.Width.Value, b.Style.Sizing.Height.Value)
 	}
 }
+
+func TestBoxes_AbsolutePositionTracksExplicitTopOffset(t *testing.T) {
+	root, err := Build(`<div style="position:absolute;top:0">Stamp</div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !root.Children[0].Style.HasTop {
+		t.Fatal("explicit top:0 must be distinguishable from an unset top offset")
+	}
+}

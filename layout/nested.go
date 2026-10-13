@@ -283,10 +283,15 @@ func flowNestedContainer(b *boxes.Box, outerTop float64, inset containerInsets, 
 		marginBottom,
 	).withStartY(outerTop + inset.top)
 	if b.Style.Position == boxes.PositionRelative {
+		containingHeight := 0.0
+		if hasDeclaredHeight(b, opts) {
+			containingHeight = math.Max(0, usedDeclaredHeight(b, opts)-verticalInsets(b))
+		}
 		childOpts.space = childOpts.space.withAbsoluteContainingBlock(
 			opts.left()+b.Style.MarginLeft+inset.left,
 			outerTop+inset.top,
 			childContentWidth,
+			containingHeight,
 		)
 	}
 	childPages, childEnd := flowLayout(childRoot, childOpts)

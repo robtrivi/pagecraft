@@ -12,7 +12,7 @@ type ComputedStyle struct {
 	Clear                                    ClearSide
 	Position                                 Position
 	Top, Left, Right, Bottom                 float64
-	HasRight, HasBottom                      bool
+	HasTop, HasRight, HasBottom              bool
 	Sizing                                   SizeConstraints
 	BoxSizing                                BoxSizing
 	GridCols                                 int // columns from grid-template-columns

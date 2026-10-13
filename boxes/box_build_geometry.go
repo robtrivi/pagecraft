@@ -6,7 +6,7 @@ import (
 
 func applyGeometryStyle(b *Box, decls css.Declarations) {
 	if t, ok := decls["top"]; ok {
-		b.Style.Top = parsePx(t)
+		b.Style.Top, b.Style.HasTop = parsePx(t), true
 	}
 	if l, ok := decls["left"]; ok {
 		b.Style.Left = parsePx(l)
