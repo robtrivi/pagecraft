@@ -187,6 +187,31 @@ func TestLayout_CSSDisplayTableRowGroupKeepsConsecutiveNonRowsInOneAnonymousRow(
 	}
 }
 
+func TestLayout_CSSDisplayTableRowWrapsDirectBlocksInAnonymousCells(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0"><div style="display:table-row"><p style="margin:0;padding:0">A</p><p style="margin:0;padding:0">B</p></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	positions := map[string]float64{}
+	for _, block := range Flow(root, opts)[0].Blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				if run.Text == "A" || run.Text == "B" {
+					positions[run.Text] = block.X
+				}
+			}
+		}
+	}
+	if len(positions) != 2 {
+		t.Fatalf("row content positions = %v, want A and B", positions)
+	}
+	if positions["A"] != 0 || positions["B"] != 0 {
+		t.Errorf("anonymous cell positions = %v, want A and B in the same cell", positions)
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {

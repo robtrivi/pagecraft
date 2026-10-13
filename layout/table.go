@@ -807,13 +807,7 @@ func anonymousTableCells(parent *boxes.Box, children []*boxes.Box) []*boxes.Box 
 }
 
 func tableCells(r *boxes.Box) []*boxes.Box {
-	var cells []*boxes.Box
-	for _, child := range r.Children {
-		if isTableCell(child) {
-			cells = append(cells, child)
-		}
-	}
-	return cells
+	return anonymousTableCells(r, r.Children)
 }
 
 func tableRowGroup(row *boxes.Box) *boxes.Box {
