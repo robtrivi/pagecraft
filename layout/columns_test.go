@@ -403,7 +403,7 @@ func TestLayout_ColumnBalancingRetriesActualOverflowBeforeCommittingFragments(t 
 	target := retryColumnBalance(initialTarget, initialTarget*4, func(height float64) (float64, func()) {
 		attempts++
 		staged, existingCounts := stageColumnAttemptPages(pages)
-		end, shortage := flowColumnRuns(container, runs, opts.top(), &staged, opts, usable, bottom, 2, gap, columnWidth, height, true)
+		end, shortage := flowColumnRuns(container, runs, opts.top(), &staged, opts, usable, bottom, 2, gap, columnWidth, columnWrapperGeometryFor(nil, columnWidth), height, true)
 		return shortage, func() {
 			mergeColumnAttemptPages(&pages, staged, existingCounts)
 			acceptedEnd = end
@@ -561,6 +561,101 @@ func TestLayout_ColumnSpanDescendantBreaksOutThroughUnstyledWrapper(t *testing.T
 	}
 	if after.Y < span.Y+span.Height {
 		t.Errorf("content after spanner starts at y=%g before its end at %g", after.Y, span.Y+span.Height)
+	}
+}
+
+func TestLayout_ColumnSpanDescendantPreservesDecoratedWrapper(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><section style="width:80%;margin:0 auto;padding:6pt;border:2pt solid #123456;background:#eaf2f2"><p style="margin:6pt 0 0">BEFORE SPANNER</p><h2 style="column-span:all;margin:0">NESTED SPANNER</h2><p style="margin:0">AFTER SPANNER</p></section></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	page := Flow(root, testOptions())[0]
+	var before, span, after *PlacedBox
+	var wrapperFragments []PlacedBox
+	for index := range page.Blocks {
+		block := &page.Blocks[index]
+		switch block.Text {
+		case "BEFORE SPANNER":
+			before = block
+		case "NESTED SPANNER":
+			span = block
+		case "AFTER SPANNER":
+			after = block
+		}
+		if block.source != nil && block.source.Tag == "section" {
+			wrapperFragments = append(wrapperFragments, *block)
+		}
+	}
+	if before == nil || span == nil || after == nil {
+		t.Fatalf("nested flow lost content: before=%v spanner=%v after=%v", before, span, after)
+	}
+	if span.X != 72 || span.Width != 451 {
+		t.Errorf("nested spanner bounds=(%g,%g), want full container at x=72 width=451", span.X, span.Width)
+	}
+	if !approx(before.X, 94.55) || !approx(before.Width, 180.4) || !approx(after.X, 94.55) || !approx(after.Width, 180.4) {
+		t.Errorf("wrapper content bounds before=(%g,%g) after=(%g,%g), want centered 80%% width with 8pt insets", before.X, before.Width, after.X, after.Width)
+	}
+	if !approx(before.Y, 86) || after.Y < span.Y+span.Height {
+		t.Errorf("wrapper insets not applied around spanner: beforeY=%g spanEnd=%g afterY=%g", before.Y, span.Y+span.Height, after.Y)
+	}
+	if len(wrapperFragments) < 2 {
+		t.Fatalf("section decoration fragments=%d, want fragments before and after spanner", len(wrapperFragments))
+	}
+	for index, fragment := range wrapperFragments {
+		if !fragment.HasBg || fragment.BorderLeft.Width != 2 || fragment.BorderRight.Width != 2 {
+			t.Errorf("section fragment %d lost its background or side borders: bg=%v borders=%g/%g", index, fragment.HasBg, fragment.BorderLeft.Width, fragment.BorderRight.Width)
+		}
+		if !approx(fragment.Width, 196.4) || !approx(fragment.X, 86.55) {
+			t.Errorf("section fragment %d bounds=(%g,%g), want centered 196.4pt border box", index, fragment.X, fragment.Width)
+		}
+		if fragment.fragmentNode == nil || len(fragment.fragmentNode.Children) == 0 {
+			t.Errorf("section fragment %d has no child occurrences in the fragment tree", index)
+		}
+	}
+	if wrapperFragments[0].Y != 72 || wrapperFragments[0].BorderTop.Width != 2 {
+		t.Errorf("first section fragment starts at y=%g with top border %g, want y=72 with border 2", wrapperFragments[0].Y, wrapperFragments[0].BorderTop.Width)
+	}
+}
+
+func TestLayout_ColumnSpanDescendantAppliesWrapperMinimumHeight(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><section style="min-height:80pt;padding:4pt"><p style="margin:0">BEFORE SPANNER</p><h2 style="column-span:all;margin:0">NESTED SPANNER</h2><p style="margin:0">AFTER SPANNER</p></section></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	page := Flow(root, testOptions())[0]
+	var wrapperHeight float64
+	for _, block := range page.Blocks {
+		if block.source != nil && block.source.Tag == "section" {
+			wrapperHeight += block.Height
+		}
+	}
+	if wrapperHeight < 88 {
+		t.Errorf("section fragment height total=%g, want at least 88pt including its 80pt minimum content height and padding", wrapperHeight)
+	}
+}
+
+func TestLayout_ColumnSpanDescendantKeepsEmptyWrapperFragmentBeforeSpanner(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><section style="padding-top:8pt;border-top:2pt solid #123456"><h2 style="column-span:all;margin:0">FIRST SPANNER</h2><p style="margin:0">AFTER SPANNER</p></section></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	page := Flow(root, testOptions())[0]
+	var span *PlacedBox
+	var emptyWrapper *PlacedBox
+	for index := range page.Blocks {
+		block := &page.Blocks[index]
+		if block.Text == "FIRST SPANNER" {
+			span = block
+		}
+		if block.source != nil && block.source.Tag == "section" && block.BorderTop.Width == 2 {
+			emptyWrapper = block
+		}
+	}
+	if span == nil || emptyWrapper == nil {
+		t.Fatalf("spanner or empty section fragment missing: spanner=%v wrapper=%v", span, emptyWrapper)
+	}
+	if emptyWrapper.Y != 72 || emptyWrapper.Height != 10 || span.Y < 82 {
+		t.Errorf("empty wrapper=(y=%g,h=%g), spannerY=%g; want 10pt top decoration before spanner at y>=82", emptyWrapper.Y, emptyWrapper.Height, span.Y)
 	}
 }
 

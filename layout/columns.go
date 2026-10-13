@@ -2,6 +2,7 @@ package layout
 
 import (
 	"math"
+	"sort"
 
 	"github.com/robtrivi/pagecraft/boxes"
 )
@@ -29,6 +30,31 @@ type columnRowCursor struct {
 	options   Options
 }
 
+type columnWrapperGeometry struct {
+	contentOffset float64
+	contentWidth  float64
+	boxOffsets    []float64
+	boxWidths     []float64
+}
+
+func columnWrapperGeometryFor(wrappers []*boxes.Box, columnWidth float64) columnWrapperGeometry {
+	geometry := columnWrapperGeometry{contentWidth: columnWidth, boxOffsets: make([]float64, len(wrappers)), boxWidths: make([]float64, len(wrappers))}
+	for index, wrapper := range wrappers {
+		available := geometry.contentWidth
+		if wrapper.Style.Sizing.Width.IsAuto() {
+			available = math.Max(0, available-wrapper.Style.MarginLeft-wrapper.Style.MarginRight)
+		}
+		width := usedWidth(wrapper, available)
+		resolved := resolveHorizontalAutoMarginsWithWidth(wrapper, geometry.contentWidth, width)
+		geometry.boxOffsets[index] = geometry.contentOffset + resolved.Style.MarginLeft
+		geometry.boxWidths[index] = width
+		inset := boxInsets(wrapper)
+		geometry.contentOffset = geometry.boxOffsets[index] + inset.left
+		geometry.contentWidth = math.Max(0, width-inset.left-inset.right)
+	}
+	return geometry
+}
+
 // Column sets flow content into equal-width fragmentainers separated by a gap.
 
 // flowColumns places children in N columns from and and returns the cursor
@@ -36,13 +62,42 @@ type columnRowCursor struct {
 func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
 	y += c.Style.MarginTop
 	items := columnItemsContainingSpanners(c)
+	var wrapperSizing columnWrapperSizing
 	for start := 0; start < len(items); {
 		span := start
 		for span < len(items) && !items[span].Style.ColumnSpanAll {
 			span++
 		}
 		balance := c.Style.ColumnFill != boxes.ColumnFillAuto || span < len(items)
-		y = flowColumnSegment(c, items[start:span], y, pages, opts, usable, bottom, balance)
+		segment := items[start:span]
+		segmentStartY := y
+		wrappers := commonColumnSpannerWrappers(c, segment)
+		if len(segment) == 0 && span < len(items) {
+			wrappers = columnSpannerWrapperPath(c, items[span])
+		}
+		segmentInsets := columnWrapperInsets(wrappers)
+		segmentTop := y
+		if start == 0 {
+			segmentTop += segmentInsets.top + columnWrapperMarginTop(wrappers)
+		}
+		blockStarts := columnPageBlockCounts(*pages)
+		segmentBottom := bottom
+		if span == len(items) {
+			segmentBottom -= segmentInsets.bottom + columnWrapperMarginBottom(wrappers)
+		}
+		gap := c.Style.ColumnGap + usable*c.Style.ColumnGapPercent/100
+		columnCount := usedColumnCount(c.Style, usable, gap)
+		columnWidth := (usable - float64(columnCount-1)*gap) / float64(columnCount)
+		wrapperGeometry := columnWrapperGeometryFor(wrappers, columnWidth)
+		y = flowColumnSegment(c, segment, segmentTop, pages, opts, usable, segmentBottom, wrappers, balance)
+		if len(segment) == 0 && len(wrappers) > 0 {
+			y = emitEmptyColumnWrapperFragment(wrappers, wrapperGeometry, segmentStartY, pages, opts, &wrapperSizing)
+		} else if len(wrappers) > 0 {
+			wrapColumnSegmentFragments(wrappers, wrapperGeometry, pages, blockStarts, segmentTop, opts, start == 0, span == len(items), &wrapperSizing)
+			if span == len(items) {
+				y += segmentInsets.bottom + columnWrapperMarginBottom(wrappers)
+			}
+		}
 		if span == len(items) {
 			break
 		}
@@ -54,6 +109,7 @@ func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, b
 			y = fragment.y
 		}
 	}
+	y += wrapperSizing.finish(opts)
 	return y + c.Style.MarginBottom
 }
 
@@ -73,11 +129,7 @@ func canUnwrapColumnSpannerPath(box *boxes.Box) bool {
 	if box == nil || box.Style.Display != boxes.DisplayBlock || box.Style.Position != boxes.PositionStatic ||
 		box.Style.Float != boxes.FloatNone || box.Style.Clear != boxes.ClearNone || isMultiColumn(box) ||
 		box.Style.Display == boxes.DisplayFlex || box.Style.Display == boxes.DisplayGrid || isTableFormattingContext(box) ||
-		box.Style.HasBg || box.Style.HasOpacity || clipsOverflow(box) || hasHeightSizing(box) ||
-		!box.Style.Sizing.Width.IsAuto() || !box.Style.Sizing.MinWidth.IsAuto() || !box.Style.Sizing.MaxWidth.IsAuto() ||
-		box.Style.MarginTop != 0 || box.Style.MarginRight != 0 || box.Style.MarginBottom != 0 || box.Style.MarginLeft != 0 ||
-		box.Style.PaddingTop != 0 || box.Style.PaddingRight != 0 || box.Style.PaddingBottom != 0 || box.Style.PaddingLeft != 0 ||
-		box.Style.BorderTop.Width != 0 || box.Style.BorderRight.Width != 0 || box.Style.BorderBottom.Width != 0 || box.Style.BorderLeft.Width != 0 ||
+		box.Style.HasOpacity || clipsOverflow(box) ||
 		box.Style.BreakBefore != boxes.BreakBeforeAuto || box.Style.BreakAfter != boxes.BreakAfterAuto || box.Style.BreakInside != boxes.BreakInsideAuto {
 		return false
 	}
@@ -98,17 +150,309 @@ func hasDescendantColumnSpanner(box *boxes.Box) bool {
 	return false
 }
 
-func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64, balance bool) float64 {
+func commonColumnSpannerWrappers(container *boxes.Box, items []*boxes.Box) []*boxes.Box {
+	if len(items) == 0 {
+		return nil
+	}
+	var path []*boxes.Box
+	for ancestor := items[0].Parent; ancestor != nil && ancestor != container; ancestor = ancestor.Parent {
+		if canUnwrapColumnSpannerPath(ancestor) {
+			path = append(path, ancestor)
+		}
+	}
+	for left, right := 0, len(path)-1; left < right; left, right = left+1, right-1 {
+		path[left], path[right] = path[right], path[left]
+	}
+	common := path[:0]
+	for _, wrapper := range path {
+		containsAll := true
+		for _, item := range items {
+			if !columnItemDescendsFrom(item, wrapper) {
+				containsAll = false
+				break
+			}
+		}
+		if containsAll {
+			common = append(common, wrapper)
+		}
+	}
+	return common
+}
+
+func columnSpannerWrapperPath(container, spanner *boxes.Box) []*boxes.Box {
+	var path []*boxes.Box
+	for ancestor := spanner.Parent; ancestor != nil && ancestor != container; ancestor = ancestor.Parent {
+		if canUnwrapColumnSpannerPath(ancestor) {
+			path = append(path, ancestor)
+		}
+	}
+	for left, right := 0, len(path)-1; left < right; left, right = left+1, right-1 {
+		path[left], path[right] = path[right], path[left]
+	}
+	return path
+}
+
+func columnItemDescendsFrom(item, ancestor *boxes.Box) bool {
+	for current := item; current != nil; current = current.Parent {
+		if current == ancestor {
+			return true
+		}
+	}
+	return false
+}
+
+func columnWrapperInsets(wrappers []*boxes.Box) containerInsets {
+	var result containerInsets
+	for _, wrapper := range wrappers {
+		inset := boxInsets(wrapper)
+		result.top += inset.top
+		result.right += inset.right
+		result.bottom += inset.bottom
+		result.left += inset.left
+	}
+	return result
+}
+
+func columnWrapperMarginTop(wrappers []*boxes.Box) float64 {
+	var margin float64
+	for _, wrapper := range wrappers {
+		margin += wrapper.Style.MarginTop
+	}
+	return margin
+}
+
+func columnWrapperMarginBottom(wrappers []*boxes.Box) float64 {
+	var margin float64
+	for _, wrapper := range wrappers {
+		margin += wrapper.Style.MarginBottom
+	}
+	return margin
+}
+
+func columnPageBlockCounts(pages []Page) []int {
+	counts := make([]int, len(pages))
+	for index := range pages {
+		counts[index] = pages[index].blockCount()
+	}
+	return counts
+}
+
+type columnWrapperFragmentGroup struct {
+	pageIndex int
+	column    int
+	start     int
+	end       int
+	left      float64
+	top       float64
+	bottom    float64
+}
+
+type columnWrapperSizing struct {
+	heights map[*boxes.Box]float64
+	last    map[*boxes.Box]*PlacedBox
+}
+
+func emitEmptyColumnWrapperFragment(wrappers []*boxes.Box, geometry columnWrapperGeometry, y float64, pages *[]Page, opts Options, sizing *columnWrapperSizing) float64 {
+	starts := make([]float64, len(wrappers))
+	cursor := y
+	for index, wrapper := range wrappers {
+		cursor += wrapper.Style.MarginTop
+		starts[index] = cursor
+		cursor += boxInsets(wrapper).top
+	}
+	heights := make([]float64, len(wrappers))
+	for index := len(wrappers) - 1; index >= 0; index-- {
+		wrapper := wrappers[index]
+		contentHeight := math.Max(0, cursor-starts[index]-boxInsets(wrapper).top)
+		height := cursor - starts[index]
+		if hasHeightSizing(wrapper) {
+			height = math.Max(height, usedHeight(wrapper, contentHeight, opts))
+		}
+		heights[index] = height
+		if starts[index]+height > cursor {
+			cursor = starts[index] + height
+		}
+	}
+	page := &(*pages)[len(*pages)-1]
+	var parent *fragmentOccurrence
+	for index, wrapper := range wrappers {
+		fragment := fragmentBox(wrapper, true, false)
+		_, font := measureFor(opts, wrapper)
+		block := placed(fragment, "", nil, opts.left()+geometry.boxOffsets[index], starts[index], geometry.boxWidths[index], heights[index], resolveSize(wrapper, opts), font)
+		block.FragmentainerIndex = 1
+		block.fragmentRef = newFragmentOccurrence(wrapper)
+		if parent != nil {
+			bindFragmentChild(parent, &block)
+		}
+		page.emitBlock(block)
+		placedFragment := page.block(page.blockCount() - 1)
+		sizing.add(wrapper, placedFragment.Height, nil)
+		parent = block.fragmentRef
+	}
+	return cursor
+}
+
+func (sizing *columnWrapperSizing) add(wrapper *boxes.Box, height float64, last *PlacedBox) {
+	if sizing.heights == nil {
+		sizing.heights = make(map[*boxes.Box]float64)
+		sizing.last = make(map[*boxes.Box]*PlacedBox)
+	}
+	sizing.heights[wrapper] += height
+	if last != nil {
+		sizing.last[wrapper] = last
+	}
+}
+
+func (sizing *columnWrapperSizing) finish(opts Options) float64 {
+	wrappers := make([]*boxes.Box, 0, len(sizing.heights))
+	for wrapper := range sizing.heights {
+		wrappers = append(wrappers, wrapper)
+	}
+	depth := func(wrapper *boxes.Box) int {
+		depth := 0
+		for current := wrapper; current != nil; current = current.Parent {
+			depth++
+		}
+		return depth
+	}
+	sort.SliceStable(wrappers, func(i, j int) bool { return depth(wrappers[i]) > depth(wrappers[j]) })
+	var extra float64
+	for _, wrapper := range wrappers {
+		height := sizing.heights[wrapper]
+		if !hasHeightSizing(wrapper) || sizing.last[wrapper] == nil {
+			continue
+		}
+		inset := boxInsets(wrapper)
+		used := usedHeight(wrapper, math.Max(0, height-inset.top-inset.bottom), opts)
+		delta := math.Max(0, used-height)
+		if delta > 0 {
+			sizing.last[wrapper].Height += delta
+			extra += delta
+			for ancestor := wrapper.Parent; ancestor != nil; ancestor = ancestor.Parent {
+				if _, exists := sizing.heights[ancestor]; exists {
+					sizing.heights[ancestor] += delta
+				}
+			}
+		}
+	}
+	return extra
+}
+
+func wrapColumnSegmentFragments(wrappers []*boxes.Box, geometry columnWrapperGeometry, pages *[]Page, starts []int, segmentTop float64, opts Options, first, last bool, sizing *columnWrapperSizing) {
+	if len(wrappers) == 0 {
+		return
+	}
+	groupsByKey := make(map[[2]int]*columnWrapperFragmentGroup)
+	var groups []*columnWrapperFragmentGroup
+	for pageIndex := range *pages {
+		start := 0
+		if pageIndex < len(starts) {
+			start = starts[pageIndex]
+		}
+		page := &(*pages)[pageIndex]
+		for blockIndex := start; blockIndex < page.blockCount(); blockIndex++ {
+			block := page.block(blockIndex)
+			if block.source == nil || !columnItemDescendsFrom(block.source, wrappers[len(wrappers)-1]) {
+				continue
+			}
+			key := [2]int{pageIndex, block.FragmentainerIndex}
+			group := groupsByKey[key]
+			if group == nil {
+				group = &columnWrapperFragmentGroup{pageIndex: pageIndex, column: block.FragmentainerIndex, start: blockIndex, end: blockIndex + 1,
+					left: block.X, top: block.Y, bottom: block.Y + block.Height}
+				groupsByKey[key] = group
+				groups = append(groups, group)
+				continue
+			}
+			if blockIndex < group.start {
+				group.start = blockIndex
+			}
+			group.end = blockIndex + 1
+			group.left = math.Min(group.left, block.X)
+			group.top = math.Min(group.top, block.Y)
+			group.bottom = math.Max(group.bottom, block.Y+block.Height)
+		}
+	}
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].pageIndex != groups[j].pageIndex {
+			return groups[i].pageIndex > groups[j].pageIndex
+		}
+		return groups[i].start > groups[j].start
+	})
+	firstGroup, lastGroup := groups[0], groups[0]
+	for _, group := range groups[1:] {
+		if group.pageIndex < firstGroup.pageIndex || group.pageIndex == firstGroup.pageIndex && group.column < firstGroup.column {
+			firstGroup = group
+		}
+		if group.pageIndex > lastGroup.pageIndex || group.pageIndex == lastGroup.pageIndex && group.column > lastGroup.column {
+			lastGroup = group
+		}
+	}
+	for _, group := range groups {
+		page := &(*pages)[group.pageIndex]
+		insertAt := group.start
+		parent := (*fragmentOccurrence)(nil)
+		top, bottom := segmentTop, group.bottom
+		if group.pageIndex > len(starts)-1 {
+			top = opts.forPage(page.Number).top()
+		}
+		columnX := group.left - geometry.contentOffset
+		var lastFragments []*PlacedBox
+		for index, wrapper := range wrappers {
+			inset := boxInsets(wrapper)
+			fragmentFirst := first && group == firstGroup
+			fragmentLast := last && group == lastGroup
+			if fragmentFirst {
+				top -= inset.top
+			}
+			if fragmentLast {
+				bottom += inset.bottom
+			}
+			fragment := fragmentBox(wrapper, fragmentFirst, fragmentLast)
+			_, font := measureFor(opts, wrapper)
+			block := placed(fragment, "", nil, columnX+geometry.boxOffsets[index], top, geometry.boxWidths[index], math.Max(0, bottom-top), resolveSize(wrapper, opts), font)
+			block.FragmentainerIndex = group.column
+			block.fragmentRef = newFragmentOccurrence(wrapper)
+			if parent != nil {
+				bindFragmentChild(parent, &block)
+			}
+			page.insertBlock(insertAt, block)
+			placedFragment := page.block(insertAt)
+			if group == lastGroup {
+				lastFragments = append(lastFragments, placedFragment)
+			} else {
+				sizing.add(wrapper, placedFragment.Height, nil)
+			}
+			insertAt++
+			parent = block.fragmentRef
+		}
+		if group == lastGroup {
+			for index, wrapper := range wrappers {
+				sizing.add(wrapper, lastFragments[index].Height, lastFragments[index])
+			}
+		}
+		for blockIndex := insertAt; blockIndex < group.end+len(wrappers); blockIndex++ {
+			child := page.block(blockIndex)
+			if child.source != nil && columnItemDescendsFrom(child.source, wrappers[len(wrappers)-1]) && child.parentFragmentRef == nil {
+				bindFragmentChild(parent, child)
+			}
+		}
+	}
+}
+
+func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64, wrappers []*boxes.Box, balance bool) float64 {
 	if len(kids) == 0 {
 		return y
 	}
 	gap := container.Style.ColumnGap + usable*container.Style.ColumnGapPercent/100
 	n := usedColumnCount(container.Style, usable, gap)
 	colW := (usable - float64(n-1)*gap) / float64(n)
+	wrapperGeometry := columnWrapperGeometryFor(wrappers, colW)
+	contentColW := wrapperGeometry.contentWidth
 	layouts := make([]columnItemLayout, len(kids))
 	for index, item := range kids {
 		if item.Style.Float != boxes.FloatNone {
-			contentWidth := math.Max(0, usedWidth(item, colW)-horizontalInsets(item))
+			contentWidth := math.Max(0, usedWidth(item, contentColW)-horizontalInsets(item))
 			lines := breakInlineStream(buildInlineStream(item, opts), contentWidth, wraps(item))
 			height := usedHeight(item, inlineHeight(lines, item, opts), opts)
 			if item.Image != nil && item.Style.Sizing.Height.IsAuto() {
@@ -117,7 +461,7 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 			layouts[index] = columnItemLayout{lines: lines, height: height}
 			continue
 		}
-		contentWidth := math.Max(0, colW-horizontalInsets(item))
+		contentWidth := math.Max(0, contentColW-horizontalInsets(item))
 		lines := breakInlineStream(buildInlineStream(item, opts), contentWidth, wraps(item))
 		contentHeight := inlineHeight(lines, item, opts)
 		height := usedHeight(item, contentHeight, opts)
@@ -133,14 +477,14 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		target = balancedColumnRowTarget(runs, n, math.Max(0, bottom-y))
 	}
 	if !balance {
-		end, _ := flowColumnRuns(container, runs, y, pages, opts, usable, bottom, n, gap, colW, target, false)
+		end, _ := flowColumnRuns(container, runs, y, pages, opts, usable, bottom, n, gap, colW, wrapperGeometry, target, false)
 		return end
 	}
 	maximumTarget := math.Max(target, math.Max(0, bottom-y))
 	var acceptedEnd float64
 	retryColumnBalance(target, maximumTarget, func(candidate float64) (float64, func()) {
 		attemptPages, existingCounts := stageColumnAttemptPages(*pages)
-		end, shortage := flowColumnRuns(container, runs, y, &attemptPages, opts, usable, bottom, n, gap, colW, candidate, true)
+		end, shortage := flowColumnRuns(container, runs, y, &attemptPages, opts, usable, bottom, n, gap, colW, wrapperGeometry, candidate, true)
 		return shortage, func() {
 			mergeColumnAttemptPages(pages, attemptPages, existingCounts)
 			acceptedEnd = end
@@ -201,7 +545,7 @@ func mergeColumnAttemptPages(pages *[]Page, staged []Page, existingCounts []int)
 	}
 }
 
-func flowColumnRuns(container *boxes.Box, runs []columnContentRun, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64, balance bool) (float64, float64) {
+func flowColumnRuns(container *boxes.Box, runs []columnContentRun, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW float64, wrapperGeometry columnWrapperGeometry, target float64, balance bool) (float64, float64) {
 	shortage := 0.0
 	for _, run := range runs {
 		if run.forcedPage {
@@ -213,7 +557,7 @@ func flowColumnRuns(container *boxes.Box, runs []columnContentRun, y float64, pa
 		if !balance {
 			runTarget = math.Max(0, bottom-y)
 		}
-		runEnd, runShortage := flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, runTarget, balance)
+		runEnd, runShortage := flowColumnFragments(container, run.kids, run.layouts, y, pages, opts, usable, bottom, n, gap, colW, wrapperGeometry, runTarget, balance)
 		y = runEnd
 		if balance {
 			shortage = math.Max(shortage, runShortage)
@@ -268,7 +612,7 @@ func usedColumnCount(style boxes.ComputedStyle, availableWidth, gap float64) int
 	return count
 }
 
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, target float64, balance bool) (float64, float64) {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW float64, wrapperGeometry columnWrapperGeometry, target float64, balance bool) (float64, float64) {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
 	index, lineOffset, end := 0, 0, y
@@ -283,6 +627,8 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 	for index < len(kids) {
 		for col := 0; col < n && index < len(kids); col++ {
 			columnX := opts.left() + float64(col)*(colW+gap)
+			contentX := columnX + wrapperGeometry.contentOffset
+			contentColW := wrapperGeometry.contentWidth
 			yc, used := y, 0.0
 			columnBottom := y
 			var columnFloats []activeFloat
@@ -292,13 +638,13 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				for _, line := range item.lines[lineOffset:] {
 					remainingWords = append(remainingWords, line...)
 				}
-				contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
+				contentWidth := math.Max(0, contentColW-horizontalInsets(kids[index]))
 				item.lines = breakInlineStream(remainingWords, contentWidth, wraps(kids[index]))
 				item.flowLines = nil
 				layouts[index], lineOffset = item, 0
 			} else if lineOffset == 0 && index < len(layouts) && len(layouts[index].flowLines) > 0 {
 				item := layouts[index]
-				contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
+				contentWidth := math.Max(0, contentColW-horizontalInsets(kids[index]))
 				item.lines = breakInlineStream(buildInlineStream(kids[index], opts), contentWidth, wraps(kids[index]))
 				item.flowLines = nil
 				layouts[index] = item
@@ -307,9 +653,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				it, item := kids[index], layouts[index]
 				fs := resolveSize(it, opts)
 				_, font := measureFor(opts, it)
-				contentWidth := math.Max(0, colW-horizontalInsets(it))
+				contentWidth := math.Max(0, contentColW-horizontalInsets(it))
 				if it.Style.Float != boxes.FloatNone {
-					columnFloat := placeColumnFloat(it, yc, columnX, colW, col+1, pages, opts)
+					columnFloat := placeColumnFloat(it, yc, contentX, contentColW, col+1, pages, opts)
 					columnFloats = append(columnFloats, columnFloat)
 					columnBottom = math.Max(columnBottom, columnFloat.bottom)
 					previousBottomMargin, hasPreviousItem = 0, false
@@ -331,7 +677,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 						used += marginGap
 					}
 					if lineOffset == 0 && len(columnFloats) > 0 {
-						item.flowLines = layoutColumnLinesAroundFloats(it, columnX, colW, yc, columnFloats, len(*pages)-1, opts)
+						item.flowLines = layoutColumnLinesAroundFloats(it, contentX, contentColW, yc, columnFloats, len(*pages)-1, opts)
 						item.lines = inlineLineWords(item.flowLines)
 						layouts[index] = item
 					}
@@ -385,7 +731,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 					fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 					lineShift := fragmentPlan.y - yc
 					yc = fragmentPlan.y
-					pb := placed(it, flexFragmentText(fragment), nil, columnX, yc, colW, h, fs, font)
+					pb := placed(it, flexFragmentText(fragment), nil, contentX, yc, contentColW, h, fs, font)
 					pb.FragmentainerIndex = col + 1
 					if len(item.flowLines) >= lineOffset+count {
 						fragmentLines := item.flowLines[lineOffset : lineOffset+count]
@@ -394,7 +740,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 						}
 						pb.Runs = inlineLineRuns(it, fragmentLines, opts)
 					} else {
-						pb.Runs = assignRuns(it, fragment, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
+						pb.Runs = assignRuns(it, fragment, contentX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
 							contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
 					}
 					(*pages)[len(*pages)-1].emitBlock(pb)
@@ -428,9 +774,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 				}
 				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: item.height, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
 				yc = fragmentPlan.y
-				pb := placed(it, it.Text, nil, columnX, yc, colW, item.height, fs, font)
+				pb := placed(it, it.Text, nil, contentX, yc, contentColW, item.height, fs, font)
 				pb.FragmentainerIndex = col + 1
-				pb.Runs = assignRuns(it, item.lines, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
+				pb.Runs = assignRuns(it, item.lines, contentX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
 					contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
 				(*pages)[len(*pages)-1].emitBlock(pb)
 				yc += item.height + it.Style.MarginBottom
@@ -452,7 +798,7 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			if container.Style.ColumnFill == boxes.ColumnFillAuto {
 				target = math.Max(0, bottom-y)
 			} else if balance {
-				remainingKids, remainingLayouts := remainingColumnContent(kids, layouts, index, lineOffset, opts, colW)
+				remainingKids, remainingLayouts := remainingColumnContent(kids, layouts, index, lineOffset, opts, wrapperGeometry.contentWidth)
 				target = balancedColumnRowTarget(splitColumnContentRuns(remainingKids, remainingLayouts, opts), n, math.Max(0, bottom-y))
 			}
 		}
