@@ -715,78 +715,102 @@ func alignTableSpanContent(span *tableSpanningCell, placedCell *PlacedBox, colla
 // footer groups retain their browser-defined order around the body rows.
 func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 	var foot []*boxes.Box
-	var anonymousCells []*boxes.Box
+	var anonymousChildren []*boxes.Box
 	flushAnonymousRow := func() {
-		if len(anonymousCells) == 0 {
+		if len(anonymousChildren) == 0 {
 			return
 		}
-		body = append(body, &boxes.Box{
-			Tag:      "anonymous-table-row",
-			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableRow},
-			Parent:   t,
-			Children: anonymousCells,
-		})
-		anonymousCells = nil
-	}
-	appendAnonymousCell := func(child *boxes.Box) {
-		cell := &boxes.Box{
-			Tag:      "anonymous-table-cell",
-			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableCell},
-			Parent:   t,
-			Parts:    []boxes.Part{{Child: child}},
-			Children: []*boxes.Box{child},
-		}
-		body = append(body, &boxes.Box{
-			Tag:      "anonymous-table-row",
-			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableRow},
-			Parent:   t,
-			Children: []*boxes.Box{cell},
-		})
+		body = append(body, anonymousTableRow(t, anonymousChildren))
+		anonymousChildren = nil
 	}
 	for _, c := range t.Children {
 		switch {
-		case isTableCell(c):
-			anonymousCells = append(anonymousCells, c)
 		case isTableRow(c):
 			flushAnonymousRow()
 			body = append(body, c)
 		case c.Tag == "thead" || c.Style.Display == boxes.DisplayTableHeaderGroup:
 			flushAnonymousRow()
-			for _, r := range c.Children {
-				if isTableRow(r) {
-					head = append(head, r)
-				}
-			}
+			head = append(head, tableRowsInGroup(c)...)
 		case c.Tag == "tfoot" || c.Style.Display == boxes.DisplayTableFooterGroup:
 			flushAnonymousRow()
-			for _, r := range c.Children {
-				if isTableRow(r) {
-					foot = append(foot, r)
-				}
-			}
+			foot = append(foot, tableRowsInGroup(c)...)
 		case c.Tag == "tbody" || c.Style.Display == boxes.DisplayTableRowGroup:
 			flushAnonymousRow()
-			for _, r := range c.Children {
-				if isTableRow(r) {
-					body = append(body, r)
-				}
-			}
+			body = append(body, tableRowsInGroup(c)...)
 		case isTableColumn(c) || isTableColumnGroup(c) || c.Style.Display == boxes.DisplayTableCaption:
 			flushAnonymousRow()
 		default:
-			flushAnonymousRow()
-			appendAnonymousCell(c)
+			anonymousChildren = append(anonymousChildren, c)
 		}
 	}
 	flushAnonymousRow()
 	return head, append(body, foot...)
 }
 
+func tableRowsInGroup(group *boxes.Box) []*boxes.Box {
+	var rows, anonymousChildren []*boxes.Box
+	flushAnonymousRow := func() {
+		if len(anonymousChildren) == 0 {
+			return
+		}
+		rows = append(rows, anonymousTableRow(group, anonymousChildren))
+		anonymousChildren = nil
+	}
+	for _, child := range group.Children {
+		switch {
+		case isTableRow(child):
+			flushAnonymousRow()
+			rows = append(rows, child)
+		default:
+			anonymousChildren = append(anonymousChildren, child)
+		}
+	}
+	flushAnonymousRow()
+	return rows
+}
+
+func anonymousTableRow(parent *boxes.Box, children []*boxes.Box) *boxes.Box {
+	row := &boxes.Box{Tag: "anonymous-table-row", Style: boxes.ComputedStyle{Display: boxes.DisplayTableRow}, Parent: parent}
+	row.Children = anonymousTableCells(row, children)
+	return row
+}
+
+func anonymousTableCells(parent *boxes.Box, children []*boxes.Box) []*boxes.Box {
+	var cells []*boxes.Box
+	var anonymousCellChildren []*boxes.Box
+	flushAnonymousCell := func() {
+		if len(anonymousCellChildren) == 0 {
+			return
+		}
+		cell := &boxes.Box{
+			Tag:      "anonymous-table-cell",
+			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableCell},
+			Parent:   parent,
+			Children: anonymousCellChildren,
+		}
+		for _, child := range anonymousCellChildren {
+			cell.Parts = append(cell.Parts, boxes.Part{Child: child})
+		}
+		cells = append(cells, cell)
+		anonymousCellChildren = nil
+	}
+	for _, child := range children {
+		if isTableCell(child) {
+			flushAnonymousCell()
+			cells = append(cells, child)
+			continue
+		}
+		anonymousCellChildren = append(anonymousCellChildren, child)
+	}
+	flushAnonymousCell()
+	return cells
+}
+
 func tableCells(r *boxes.Box) []*boxes.Box {
 	var cells []*boxes.Box
-	for _, c := range r.Children {
-		if isTableCell(c) {
-			cells = append(cells, c)
+	for _, child := range r.Children {
+		if isTableCell(child) {
+			cells = append(cells, child)
 		}
 	}
 	return cells

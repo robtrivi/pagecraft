@@ -138,6 +138,55 @@ func TestLayout_CSSDisplayTableWrapsDirectBlocksInAnonymousCells(t *testing.T) {
 	t.Fatal("direct block content was not laid out in an anonymous table cell")
 }
 
+func TestLayout_CSSDisplayTableRowGroupWrapsDirectCellsInAnonymousRows(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0"><div style="display:table-row-group"><span style="display:table-cell;padding:0">A</span><span style="display:table-cell;padding:0">B</span></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("row-group cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if left.X != 0 || right.X != 50 {
+		t.Errorf("row-group cell positions x=%g/%gpt, want 0/50pt", left.X, right.X)
+	}
+}
+
+func TestLayout_CSSDisplayTableRowGroupKeepsConsecutiveNonRowsInOneAnonymousRow(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:120pt;margin:0;border-spacing:0"><div style="display:table-row-group"><span style="display:table-cell;padding:0">A</span><p style="margin:0;padding:0">B</p><span style="display:table-cell;padding:0">C</span></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	positions := map[string]float64{}
+	for _, block := range Flow(root, opts)[0].Blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				if run.Text == "A" || run.Text == "B" || run.Text == "C" {
+					positions[run.Text] = block.X
+				}
+			}
+		}
+	}
+	if len(positions) != 3 {
+		t.Fatalf("row-group content positions = %v, want all A, B, and C", positions)
+	}
+	if positions["A"] != 0 || positions["B"] != 40 || positions["C"] != 80 {
+		t.Errorf("row-group cell positions = %v, want A/B/C at 0/40/80pt in one anonymous row", positions)
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {
