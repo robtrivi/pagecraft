@@ -19,6 +19,9 @@ func buildBoxChildren(the *html.Node, b *Box, decls css.Declarations, ss *styleS
 			if err != nil {
 				return err
 			}
+			if cb == nil {
+				continue
+			}
 			cb.Parent = b
 			b.Children = append(b.Children, cb)
 			b.Parts = append(b.Parts, Part{Child: cb})

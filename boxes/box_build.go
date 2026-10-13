@@ -20,6 +20,9 @@ func buildBox(the *html.Node, inherited css.Declarations, ss *styleSheet, ld *lo
 	applyTypographyStyle(b, the, decls)
 	applyPaginationStyle(b, decls)
 	applyTextStyle(b, decls, ancestorDecorations)
+	if b.Style.Display == DisplayNone {
+		return nil, nil
+	}
 	if err := buildBoxChildren(the, b, decls, ss, ld); err != nil {
 		return nil, err
 	}

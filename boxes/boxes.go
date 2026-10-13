@@ -116,6 +116,10 @@ func BuildWithOptions(htmlStr string, opts Options) (*Box, []string, error) {
 	if err != nil {
 		return nil, ld.warnings, err
 	}
+	if bodyBox == nil {
+		AssignSourcePaths(root)
+		return root, ld.warnings, nil
+	}
 	root.Style.HasBg, root.Style.Bg = bodyBox.Style.HasBg, bodyBox.Style.Bg
 	root.Children = append(root.Children, bodyBox.Children...)
 	AssignSourcePaths(root)

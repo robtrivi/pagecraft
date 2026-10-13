@@ -9,6 +9,7 @@ import (
 type Display string
 
 const (
+	DisplayNone   Display = "none"
 	DisplayBlock  Display = "block"
 	DisplayInline Display = "inline"
 	DisplayFlex   Display = "flex"
@@ -169,6 +170,8 @@ const (
 
 func parseDisplay(value string) (Display, bool) {
 	switch value {
+	case "none":
+		return DisplayNone, true
 	case "block":
 		return DisplayBlock, true
 	case "inline":
