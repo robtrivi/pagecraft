@@ -23,3 +23,13 @@ func TestBoxes_ParsesColumnWidth(t *testing.T) {
 		t.Errorf("column-width: has=%v width=%v, want true/200pt", style.HasColumnWidth, style.ColumnWidth)
 	}
 }
+
+func TestBoxes_ParsesColumnFillAuto(t *testing.T) {
+	root, err := Build(`<div style="column-count:3;column-fill:auto"></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := root.Children[0].Style.ColumnFill; got != ColumnFillAuto {
+		t.Errorf("column-fill=%q, want auto", got)
+	}
+}

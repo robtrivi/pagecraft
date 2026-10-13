@@ -108,6 +108,55 @@ func TestLayout_ColumnTextBreakAfterPageStartsDecoratedBlockOnNewPage(t *testing
 	}
 }
 
+func TestLayout_ColumnFillAutoFillsEachColumnSequentially(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:3;column-gap:0;column-fill:auto"><p style="margin:0">FIRST</p><p style="margin:0">SECOND</p><p style="margin:0">THIRD</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	if len(blocks) != 3 {
+		t.Fatalf("blocks=%d, want 3", len(blocks))
+	}
+	for index, block := range blocks {
+		if block.X != 72 {
+			t.Errorf("block %q starts at x=%g, want sequential flow in first column at x=72", block.Text, block.X)
+		}
+		if index > 0 && block.Y <= blocks[index-1].Y {
+			t.Errorf("block %q y=%g must follow the previous block at y=%g", block.Text, block.Y, blocks[index-1].Y)
+		}
+	}
+}
+
+func TestLayout_ColumnFillAutoKeepsDecoratedBlocksInSourceColumn(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:3;column-gap:0;column-fill:auto"><div style="padding:1pt">FIRST</div><div style="padding:1pt">SECOND</div><div style="padding:1pt">THIRD</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	if len(blocks) != 3 {
+		t.Fatalf("blocks=%d, want 3", len(blocks))
+	}
+	for _, block := range blocks {
+		if block.X != 72 {
+			t.Errorf("decorated block %q starts at x=%g, want sequential flow in first column at x=72", block.Text, block.X)
+		}
+	}
+}
+
+func TestLayout_ColumnFillAutoBalancesContentBeforeSpanner(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:3;column-gap:0;column-fill:auto"><p style="margin:0">BEFORE A</p><p style="margin:0">BEFORE B</p><p style="margin:0">BEFORE C</p><h2 style="column-span:all;margin:0">SPANNER</h2><p style="margin:0">AFTER A</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	if len(blocks) != 5 {
+		t.Fatalf("blocks=%d, want 5", len(blocks))
+	}
+	if blocks[0].X == blocks[1].X || blocks[1].X == blocks[2].X {
+		t.Errorf("content before the spanner must balance across columns: x=%g/%g/%g", blocks[0].X, blocks[1].X, blocks[2].X)
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {

@@ -104,6 +104,9 @@ type BreakAfterMode string
 // BreakInsideMode controls whether a box should stay intact when it fits.
 type BreakInsideMode string
 
+// ColumnFillMode selects balanced or sequential multicolumn flow.
+type ColumnFillMode string
+
 // DimensionKind identifies whether the declared CSS size is auto, absolute or relative.
 type DimensionKind uint8
 
@@ -170,6 +173,11 @@ const (
 const (
 	BreakInsideAuto  BreakInsideMode = ""
 	BreakInsideAvoid BreakInsideMode = "avoid"
+)
+
+const (
+	ColumnFillBalance ColumnFillMode = ""
+	ColumnFillAuto    ColumnFillMode = "auto"
 )
 
 const (

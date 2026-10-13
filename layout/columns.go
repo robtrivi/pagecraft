@@ -25,7 +25,8 @@ func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, b
 		for span < len(items) && !items[span].Style.ColumnSpanAll {
 			span++
 		}
-		y = flowColumnSegment(c, items[start:span], y, pages, opts, usable, bottom)
+		balance := c.Style.ColumnFill != boxes.ColumnFillAuto || span < len(items)
+		y = flowColumnSegment(c, items[start:span], y, pages, opts, usable, bottom, balance)
 		if span == len(items) {
 			break
 		}
@@ -35,7 +36,7 @@ func flowColumns(c *boxes.Box, y float64, pages *[]Page, opts Options, usable, b
 	return y + c.Style.MarginBottom
 }
 
-func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
+func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64, balance bool) float64 {
 	if len(kids) == 0 {
 		return y
 	}
@@ -67,7 +68,7 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		remainingHeight += height + item.Style.MarginTop + item.Style.MarginBottom
 	}
 	if hasSplittableColumnText(kids) {
-		return flowColumnFragments(container, kids, layouts, y, pages, opts, usable, bottom, n, gap, colW, remainingHeight)
+		return flowColumnFragments(container, kids, layouts, y, pages, opts, usable, bottom, n, gap, colW, remainingHeight, balance)
 	}
 	end := y
 	rulePage := len(*pages) - 1
@@ -76,7 +77,7 @@ func flowColumnSegment(container *boxes.Box, kids []*boxes.Box, y float64, pages
 		remainingColumns := n - col
 		it := start
 		hi := len(kids)
-		if remainingColumns > 1 {
+		if balance && remainingColumns > 1 {
 			maxEnd := len(kids) - (remainingColumns - 1)
 			target := remainingHeight / float64(remainingColumns)
 			bestEnd, bestDistance, candidateHeight := it+1, math.Inf(1), 0.0
@@ -173,10 +174,13 @@ func hasSplittableColumnText(kids []*boxes.Box) bool {
 	return false
 }
 
-func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, totalHeight float64) float64 {
+func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []columnItemLayout, y float64, pages *[]Page, opts Options, usable, bottom float64, n int, gap, colW, totalHeight float64, balance bool) float64 {
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
 	target := totalHeight / float64(n)
+	if !balance {
+		target = math.Max(0, bottom-y)
+	}
 	index, lineOffset, end := 0, 0, y
 	continuationX, continuationY := opts.left(), y
 	continuationFragmentainer := 1

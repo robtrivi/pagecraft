@@ -37,6 +37,7 @@ type ComputedStyle struct {
 	ColCount                                 int     // column-count (0 = no columns)
 	ColumnWidth                              float64 // column-width in points
 	HasColumnWidth                           bool
+	ColumnFill                               ColumnFillMode
 	ColumnSpanAll                            bool // column-span: all
 	ColumnRuleWidth                          float64
 	ColumnRuleColor                          [4]float64

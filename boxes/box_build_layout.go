@@ -20,6 +20,11 @@ func applyLayoutStyle(b *Box, the *html.Node, decls css.Declarations) {
 }
 
 func applyColumnsStyle(b *Box, decls css.Declarations) {
+	if value, ok := decls["column-fill"]; ok {
+		if fill, valid := parseColumnFill(value); valid {
+			b.Style.ColumnFill = fill
+		}
+	}
 	if cc, ok := decls["column-count"]; ok {
 		if n, err := strconv.Atoi(cc); err == nil && n > 0 {
 			b.Style.ColCount = n
@@ -48,6 +53,17 @@ func applyColumnsStyle(b *Box, decls css.Declarations) {
 				*longhand.percentDst = gap.percent
 			}
 		}
+	}
+}
+
+func parseColumnFill(value string) (ColumnFillMode, bool) {
+	switch strings.TrimSpace(value) {
+	case "auto":
+		return ColumnFillAuto, true
+	case "balance":
+		return ColumnFillBalance, true
+	default:
+		return ColumnFillBalance, false
 	}
 }
 
