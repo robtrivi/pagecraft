@@ -56,8 +56,8 @@ func TestLayout_LineHeightNormalUsesSelectedFontMetrics(t *testing.T) {
 	if len(blocks) != 2 {
 		t.Fatalf("blocks: got %d, want 2", len(blocks))
 	}
-	if !approx(blocks[0].Height, 16.344) {
-		t.Errorf("normal: got %v pt, want 16.344 according to Noto Serif metrics", blocks[0].Height)
+	if !approx(blocks[0].Height, 16.5) {
+		t.Errorf("normal: got %v pt, want 16.5 (22 CSS px using Chromium's rounded Noto Serif metrics)", blocks[0].Height)
 	}
 	if !approx(blocks[1].Height, 14.4) {
 		t.Errorf("explicit 1.2: got %v pt, want 14.4", blocks[1].Height)

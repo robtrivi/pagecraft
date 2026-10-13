@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,6 +128,33 @@ func TestLayout_CustomFont_UsesShapedAdvance(t *testing.T) {
 	got, want := blocks[0].Runs[0][0].Width, face.Shape("AV", 12).Width
 	if got != want {
 		t.Errorf("width layout=%v, want shaped advance=%v", got, want)
+	}
+}
+
+func TestLayout_LineHeightNormalUsesChromiumRoundedFontMetrics(t *testing.T) {
+	path := "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Skip("Liberation Sans is not installed")
+	}
+	face, err := fonts.Load(data)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	root, err := boxes.Build(`<p style="font-family: Mi; font-size: 13pt; margin: 0">RUCALIA <span style="font-size: 8pt">/ COMPROBANTES</span></p>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	root.Fonts = map[string]*fonts.Face{"Mi": face}
+	root.Children[0].Style.FontFamily = "Mi"
+	opts := testOptionsWithFace(face)
+	opts.LineHeight = 0
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks=%d, want 1", len(blocks))
+	}
+	if math.Abs(blocks[0].Height-15.75) > 0.01 {
+		t.Errorf("normal line height=%gpt, want 15.75pt from Chromium's rounded ascent, descent, and leading", blocks[0].Height)
 	}
 }
 

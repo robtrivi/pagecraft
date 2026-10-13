@@ -4,6 +4,7 @@ package fonts
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -241,11 +242,19 @@ func (f *Face) NormalLineHeight(size float64) float64 {
 	if m.UnitsPerEm <= 0 {
 		return 0
 	}
-	height := m.Ascender - m.Descender + m.LineGap
+	// Chromium builds normal line spacing from separately rounded font ascent,
+	// descent, and leading at CSS-pixel resolution. Rounding their sum (or
+	// retaining fractional point metrics) changes table row heights over many
+	// text lines.
+	cssPixelsPerPoint := 96.0 / 72.0
+	scale := size * cssPixelsPerPoint / float64(m.UnitsPerEm)
+	height := math.Round(float64(m.Ascender)*scale) +
+		math.Round(float64(-m.Descender)*scale) +
+		math.Round(float64(m.LineGap)*scale)
 	if height <= 0 {
 		return 0
 	}
-	return float64(height) * size / float64(m.UnitsPerEm)
+	return height * 72.0 / 96.0
 }
 
 // BaselineOffset positions the baseline in the line box, centering extra
