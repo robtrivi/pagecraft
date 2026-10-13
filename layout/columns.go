@@ -21,6 +21,14 @@ type columnContentRun struct {
 	forcedPage     bool
 }
 
+type columnRowCursor struct {
+	pageIndex int
+	rowIndex  int
+	top       float64
+	bottom    float64
+	options   Options
+}
+
 // Column sets flow content into equal-width fragmentainers separated by a gap.
 
 // flowColumns places children in N columns from and and returns the cursor
@@ -224,8 +232,6 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 	// A fragmentable paragraph may use the remaining space in one column;
 	// subsequent children continue in source order in the next column.
 	index, lineOffset, end := 0, 0, y
-	continuationX, continuationY := opts.left(), y
-	continuationFragmentainer := 1
 	previousBottomMargin, hasPreviousItem := 0.0, false
 	firstPage := len(*pages) - 1
 	pageBlockStarts := make([]int, len(*pages))
@@ -233,188 +239,177 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		pageBlockStarts[pageIndex] = (*pages)[pageIndex].blockCount()
 	}
 	shortage := math.Inf(1)
-	for col := 0; col < n && index < len(kids); col++ {
-		columnX := opts.left() + float64(col)*(colW+gap)
-		continuationFragmentainer = col + 1
-		yc, used := y, 0.0
-		columnBottom := y
-		var columnFloats []activeFloat
-		if lineOffset > 0 && index < len(layouts) && len(layouts[index].flowLines) > 0 {
-			item := layouts[index]
-			var remainingWords inlineStream
-			for _, line := range item.lines[lineOffset:] {
-				remainingWords = append(remainingWords, line...)
+	row := columnRowCursor{pageIndex: firstPage, top: y, bottom: bottom, options: opts}
+	for index < len(kids) {
+		for col := 0; col < n && index < len(kids); col++ {
+			columnX := opts.left() + float64(col)*(colW+gap)
+			yc, used := y, 0.0
+			columnBottom := y
+			var columnFloats []activeFloat
+			if lineOffset > 0 && index < len(layouts) && len(layouts[index].flowLines) > 0 {
+				item := layouts[index]
+				var remainingWords inlineStream
+				for _, line := range item.lines[lineOffset:] {
+					remainingWords = append(remainingWords, line...)
+				}
+				contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
+				item.lines = breakInlineStream(remainingWords, contentWidth, wraps(kids[index]))
+				item.flowLines = nil
+				layouts[index], lineOffset = item, 0
+			} else if lineOffset == 0 && index < len(layouts) && len(layouts[index].flowLines) > 0 {
+				item := layouts[index]
+				contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
+				item.lines = breakInlineStream(buildInlineStream(kids[index], opts), contentWidth, wraps(kids[index]))
+				item.flowLines = nil
+				layouts[index] = item
 			}
-			contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
-			item.lines = breakInlineStream(remainingWords, contentWidth, wraps(kids[index]))
-			item.flowLines = nil
-			layouts[index], lineOffset = item, 0
-		} else if lineOffset == 0 && index < len(layouts) && len(layouts[index].flowLines) > 0 {
-			item := layouts[index]
-			contentWidth := math.Max(0, colW-horizontalInsets(kids[index]))
-			item.lines = breakInlineStream(buildInlineStream(kids[index], opts), contentWidth, wraps(kids[index]))
-			item.flowLines = nil
-			layouts[index] = item
-		}
-		for index < len(kids) {
-			it, item := kids[index], layouts[index]
-			fs := resolveSize(it, opts)
-			_, font := measureFor(opts, it)
-			contentWidth := math.Max(0, colW-horizontalInsets(it))
-			if it.Style.Float != boxes.FloatNone {
-				columnFloat := placeColumnFloat(it, yc, columnX, colW, col+1, pages, opts)
-				columnFloats = append(columnFloats, columnFloat)
-				columnBottom = math.Max(columnBottom, columnFloat.bottom)
-				previousBottomMargin, hasPreviousItem = 0, false
-				index++
-				continue
-			}
-			if it.Style.Clear != boxes.ClearNone {
-				clearedY := clearanceY(columnFloats, len(*pages)-1, it.Style.Clear, yc)
-				if clearedY > yc {
-					used += clearedY - yc
-					yc = clearedY
+			for index < len(kids) {
+				it, item := kids[index], layouts[index]
+				fs := resolveSize(it, opts)
+				_, font := measureFor(opts, it)
+				contentWidth := math.Max(0, colW-horizontalInsets(it))
+				if it.Style.Float != boxes.FloatNone {
+					columnFloat := placeColumnFloat(it, yc, columnX, colW, col+1, pages, opts)
+					columnFloats = append(columnFloats, columnFloat)
+					columnBottom = math.Max(columnBottom, columnFloat.bottom)
 					previousBottomMargin, hasPreviousItem = 0, false
+					index++
+					continue
 				}
-			}
-			if columnTextCanSplit(it) && len(item.lines) > 0 {
-				if lineOffset == 0 {
-					marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
-					yc += marginGap
-					used += marginGap
-				}
-				if lineOffset == 0 && len(columnFloats) > 0 {
-					item.flowLines = layoutColumnLinesAroundFloats(it, columnX, colW, yc, columnFloats, len(*pages)-1, opts)
-					item.lines = inlineLineWords(item.flowLines)
-					layouts[index] = item
-				}
-				columnLimit := columnLineLimit(y+target, yc, columnFloats, it, opts)
-				count := linesFittingColumn(item, lineOffset, yc, columnLimit, it, opts)
-				left := len(item.lines) - lineOffset
-				if count > 0 && count < left {
-					units := columnTextLineFragmentUnits(item.lines[lineOffset:], it, opts)
-					cut, _, retry := enforceWidowsOrphans(units, 0, count, 0, yc, y, nil)
-					if cut > 0 {
-						count = cut
-					} else if retry && used > 0 {
-						break
+				if it.Style.Clear != boxes.ClearNone {
+					clearedY := clearanceY(columnFloats, len(*pages)-1, it.Style.Clear, yc)
+					if clearedY > yc {
+						used += clearedY - yc
+						yc = clearedY
+						previousBottomMargin, hasPreviousItem = 0, false
 					}
 				}
-				if col == n-1 && count < left && count > 0 {
-					recordColumnShortage(&shortage, columnTextLineOverflow(item, lineOffset, lineOffset+count, yc, columnLimit, it, opts))
-				}
-				if col == n-1 || count > left {
-					count = left
-				}
-				if count < 1 {
-					if used > 0 {
-						break
+				if columnTextCanSplit(it) && len(item.lines) > 0 {
+					if lineOffset == 0 {
+						marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
+						yc += marginGap
+						used += marginGap
 					}
-					count = 1
-				}
-				fragment := item.lines[lineOffset : lineOffset+count]
-				h := inlineHeight(fragment, it, opts) + verticalInsets(it)
-				if len(item.flowLines) >= lineOffset+count {
-					lastLine := item.flowLines[lineOffset+count-1]
-					h = lastLine.y + lastLine.height - yc + it.Style.BorderBottom.Width + it.Style.PaddingBottom
-				}
-				if col == n-1 && lineOffset+count == len(item.lines) {
-					recordColumnShortage(&shortage, yc+h-(y+target))
-				}
-				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-				breakBefore := fragmentBreakAuto
-				if lineOffset == 0 {
-					if index > 0 && forcedPageBreakBetween(kids[index-1], it) {
-						breakBefore = fragmentBreakPage
+					if lineOffset == 0 && len(columnFloats) > 0 {
+						item.flowLines = layoutColumnLinesAroundFloats(it, columnX, colW, yc, columnFloats, len(*pages)-1, opts)
+						item.lines = inlineLineWords(item.flowLines)
+						layouts[index] = item
+					}
+					columnLimit := columnLineLimit(y+target, yc, columnFloats, it, opts)
+					count := linesFittingColumn(item, lineOffset, yc, columnLimit, it, opts)
+					left := len(item.lines) - lineOffset
+					if count > 0 && count < left {
+						units := columnTextLineFragmentUnits(item.lines[lineOffset:], it, opts)
+						cut, _, retry := enforceWidowsOrphans(units, 0, count, 0, yc, y, nil)
+						if cut > 0 {
+							count = cut
+						} else if retry && used > 0 {
+							minimumLines := columnWidowOrphanMinimumLines(it, len(units))
+							minimumHeight := measureFragmentRange(units, 0, minimumLines, nil)
+							recordColumnShortage(&shortage, yc+minimumHeight-(y+target))
+							break
+						}
+					}
+					if col == n-1 && count < left && count > 0 {
+						recordColumnShortage(&shortage, columnTextLineOverflow(item, lineOffset, lineOffset+count, yc, columnLimit, it, opts))
+					}
+					if col == n-1 || count > left {
+						count = left
+					}
+					if count < 1 {
+						if used > 0 {
+							break
+						}
+						count = 1
+					}
+					fragment := item.lines[lineOffset : lineOffset+count]
+					h := inlineHeight(fragment, it, opts) + verticalInsets(it)
+					if len(item.flowLines) >= lineOffset+count {
+						lastLine := item.flowLines[lineOffset+count-1]
+						h = lastLine.y + lastLine.height - yc + it.Style.BorderBottom.Width + it.Style.PaddingBottom
+					}
+					if col == n-1 && lineOffset+count == len(item.lines) {
+						recordColumnShortage(&shortage, yc+h-(y+target))
+					}
+					pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
+					breakBefore := fragmentBreakAuto
+					if lineOffset == 0 {
+						if index > 0 && forcedPageBreakBetween(kids[index-1], it) {
+							breakBefore = fragmentBreakPage
+						} else {
+							breakBefore = pageBreakValue(it.Style.BreakBefore)
+						}
+					}
+					fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
+					lineShift := fragmentPlan.y - yc
+					yc = fragmentPlan.y
+					pb := placed(it, flexFragmentText(fragment), nil, columnX, yc, colW, h, fs, font)
+					pb.FragmentainerIndex = col + 1
+					if len(item.flowLines) >= lineOffset+count {
+						fragmentLines := item.flowLines[lineOffset : lineOffset+count]
+						if lineShift != 0 {
+							fragmentLines = shiftInlineLines(fragmentLines, lineShift)
+						}
+						pb.Runs = inlineLineRuns(it, fragmentLines, opts)
 					} else {
-						breakBefore = pageBreakValue(it.Style.BreakBefore)
+						pb.Runs = assignRuns(it, fragment, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
+							contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
 					}
-				}
-				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: h, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
-				lineShift := fragmentPlan.y - yc
-				yc = fragmentPlan.y
-				pb := placed(it, flexFragmentText(fragment), nil, columnX, yc, colW, h, fs, font)
-				pb.FragmentainerIndex = col + 1
-				if len(item.flowLines) >= lineOffset+count {
-					fragmentLines := item.flowLines[lineOffset : lineOffset+count]
-					if lineShift != 0 {
-						fragmentLines = shiftInlineLines(fragmentLines, lineShift)
+					(*pages)[len(*pages)-1].emitBlock(pb)
+					yc += h
+					used += h
+					lineOffset += count
+					if lineOffset == len(item.lines) {
+						yc += it.Style.MarginBottom
+						used += it.Style.MarginBottom
+						previousBottomMargin, hasPreviousItem = it.Style.MarginBottom, true
+						lineOffset, index = 0, index+1
+					} else {
+						break
 					}
-					pb.Runs = inlineLineRuns(it, fragmentLines, opts)
-				} else {
-					pb.Runs = assignRuns(it, fragment, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
-						contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
+					continue
 				}
-				(*pages)[len(*pages)-1].emitBlock(pb)
-				yc += h
-				used += h
-				lineOffset += count
-				if lineOffset == len(item.lines) {
-					yc += it.Style.MarginBottom
-					used += it.Style.MarginBottom
-					previousBottomMargin, hasPreviousItem = it.Style.MarginBottom, true
-					lineOffset, index = 0, index+1
-				} else {
+				marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
+				h := item.height + marginGap + it.Style.MarginBottom
+				columnLimit := math.Max(y+target, columnBottom)
+				if used > 0 && yc+h > columnLimit+fragmentEpsilon {
+					if col == n-1 {
+						recordColumnShortage(&shortage, yc+h-columnLimit)
+					}
 					break
 				}
-				continue
-			}
-			marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
-			h := item.height + marginGap + it.Style.MarginBottom
-			columnLimit := math.Max(y+target, columnBottom)
-			if used > 0 && yc+h > columnLimit+fragmentEpsilon {
-				if col == n-1 {
-					recordColumnShortage(&shortage, yc+h-columnLimit)
+				yc += marginGap
+				pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
+				breakBefore := pageBreakValue(it.Style.BreakBefore)
+				if index > 0 && forcedPageBreakBetween(kids[index-1], it) {
+					breakBefore = fragmentBreakPage
 				}
-				break
+				fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: item.height, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
+				yc = fragmentPlan.y
+				pb := placed(it, it.Text, nil, columnX, yc, colW, item.height, fs, font)
+				pb.FragmentainerIndex = col + 1
+				pb.Runs = assignRuns(it, item.lines, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
+					contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
+				(*pages)[len(*pages)-1].emitBlock(pb)
+				yc += item.height + it.Style.MarginBottom
+				used += h
+				previousBottomMargin, hasPreviousItem = it.Style.MarginBottom, true
+				index++
 			}
-			yc += marginGap
-			pageHasContent := (*pages)[len(*pages)-1].blockCount() > 0
-			breakBefore := pageBreakValue(it.Style.BreakBefore)
-			if index > 0 && forcedPageBreakBetween(kids[index-1], it) {
-				breakBefore = fragmentBreakPage
+			if columnBottom > end || yc > end {
+				end = math.Max(columnBottom, yc)
 			}
-			fragmentPlan := placeFragmentUnitForPage(fragmentUnit{height: item.height, breakBefore: breakBefore}, yc, opts.top(), bottom, pageHasContent, pages, opts)
-			yc = fragmentPlan.y
-			pb := placed(it, it.Text, nil, columnX, yc, colW, item.height, fs, font)
-			pb.FragmentainerIndex = col + 1
-			pb.Runs = assignRuns(it, item.lines, columnX+it.Style.BorderLeft.Width+it.Style.PaddingLeft,
-				contentWidth, yc+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
-			(*pages)[len(*pages)-1].emitBlock(pb)
-			yc += item.height + it.Style.MarginBottom
-			used += h
-			previousBottomMargin, hasPreviousItem = it.Style.MarginBottom, true
-			index++
-		}
-		if columnBottom > end || yc > end {
-			end = math.Max(columnBottom, yc)
-		}
-		if col == n-1 {
-			recordColumnShortage(&shortage, math.Max(columnBottom, yc)-(y+target))
-		}
-		continuationX, continuationY = columnX, yc
-	}
-	if index < len(kids) {
-		// Keep unconsumed content: continue it below this segment if the
-		// declared column count was insufficient for the available lines.
-		for index < len(kids) {
-			it := kids[index]
-			fs := resolveSize(it, opts)
-			_, font := measureFor(opts, it)
-			item := layouts[index]
-			contentWidth := math.Max(0, colW-horizontalInsets(it))
-			marginGap := columnCollapsedMarginGap(previousBottomMargin, hasPreviousItem, it.Style.MarginTop)
-			continuationY += marginGap
-			pb := placed(it, it.Text, nil, continuationX, continuationY, colW, item.height, fs, font)
-			pb.FragmentainerIndex = continuationFragmentainer
-			pb.Runs = assignRuns(it, item.lines, continuationX+it.Style.BorderLeft.Width+it.Style.PaddingLeft, contentWidth, continuationY+it.Style.BorderTop.Width+it.Style.PaddingTop, opts)
-			(*pages)[len(*pages)-1].emitBlock(pb)
-			continuationY += item.height + it.Style.MarginBottom
-			previousBottomMargin, hasPreviousItem = it.Style.MarginBottom, true
-			if continuationY > end {
-				end = continuationY
+			if col == n-1 {
+				recordColumnShortage(&shortage, math.Max(columnBottom, yc)-(y+target))
 			}
-			index++
+		}
+		if index < len(kids) {
+			row = nextColumnRow(row, end, pages)
+			opts, y, bottom = row.options, row.top, row.bottom
+			end = row.top
+			if container.Style.ColumnFill == boxes.ColumnFillAuto {
+				target = math.Max(0, bottom-y)
+			}
 		}
 	}
 	if container.Style.ColumnRuleWidth > 0 && gap > 0 {
@@ -459,6 +454,35 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		shortage = 0
 	}
 	return end, shortage
+}
+
+func nextColumnRow(current columnRowCursor, y float64, pages *[]Page) columnRowCursor {
+	pageIndex := max(current.pageIndex, len(*pages)-1)
+	pageOptions := current.options
+	if len(pageOptions.PageRules) != 0 {
+		pageOptions = pageOptions.forPage(pageIndex + 1)
+	}
+	pageHasContent := (*pages)[pageIndex].blockCount() > 0
+	fragment := placeFragmentUnitForPage(
+		fragmentUnit{breakBefore: fragmentBreakPage},
+		y,
+		pageOptions.top(),
+		pageOptions.pageBottom(),
+		pageHasContent,
+		pages,
+		pageOptions,
+	)
+	pageIndex = len(*pages) - 1
+	if len(pageOptions.PageRules) != 0 {
+		pageOptions = pageOptions.forPage(pageIndex + 1)
+	}
+	return columnRowCursor{
+		pageIndex: pageIndex,
+		rowIndex:  current.rowIndex + 1,
+		top:       fragment.y,
+		bottom:    pageOptions.pageBottom(),
+		options:   pageOptions,
+	}
 }
 
 func recordColumnShortage(shortage *float64, measured float64) {
@@ -726,6 +750,21 @@ func columnTextLineFragmentUnits(lines []inlineStream, box *boxes.Box, opts Opti
 		}
 	}
 	return units
+}
+
+func columnWidowOrphanMinimumLines(box *boxes.Box, total int) int {
+	orphans, widows := box.Style.Orphans, box.Style.Widows
+	if orphans <= 0 {
+		orphans = 2
+	}
+	if widows <= 0 {
+		widows = 2
+	}
+	minimum := orphans + widows
+	if widows > 2 && orphans == 2 {
+		minimum = 4
+	}
+	return min(total, minimum)
 }
 
 func columnLineLimit(targetEnd, lineY float64, floats []activeFloat, box *boxes.Box, opts Options) float64 {

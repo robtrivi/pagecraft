@@ -128,6 +128,44 @@ func TestLayout_ColumnFillAutoFillsEachColumnSequentially(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnRowsContinueAtPageTopAfterUsedColumns(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0;column-fill:auto"><div style="margin:0;height:25pt;padding:1pt 0">ITEM 1</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 2</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 3</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 4</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 5</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 6</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 7</div><div style="margin:0;height:25pt;padding:1pt 0">ITEM 8</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 100, 10
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("pages=%d, want a second column row on page 2", len(pages))
+	}
+	var order []string
+	for pageIndex, page := range pages {
+		if len(page.Blocks) != 4 {
+			t.Errorf("page %d blocks=%d, want 4", pageIndex+1, len(page.Blocks))
+		}
+		for _, block := range page.Blocks {
+			order = append(order, block.Text)
+			if block.Y+block.Height > 90+fragmentEpsilon {
+				t.Errorf("page %d %q ends at y=%g, beyond its 90pt content bottom", pageIndex+1, block.Text, block.Y+block.Height)
+			}
+			wantX := 10.0
+			if pageIndex == 0 && (strings.Contains(block.Text, "ITEM 3") || strings.Contains(block.Text, "ITEM 4")) || pageIndex == 1 && (strings.Contains(block.Text, "ITEM 7") || strings.Contains(block.Text, "ITEM 8")) {
+				wantX = 110
+			}
+			if block.X != wantX {
+				t.Errorf("page %d %q x=%g, want column x=%g", pageIndex+1, block.Text, block.X, wantX)
+			}
+		}
+	}
+	for index, want := range []string{"ITEM 1", "ITEM 2", "ITEM 3", "ITEM 4", "ITEM 5", "ITEM 6", "ITEM 7", "ITEM 8"} {
+		if index >= len(order) || order[index] != want {
+			t.Errorf("block order=%v, want ITEM 1 through ITEM 8 in source order", order)
+			break
+		}
+	}
+}
+
 func TestLayout_ColumnFillAutoKeepsDecoratedBlocksInSourceColumn(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:3;column-gap:0;column-fill:auto"><div style="padding:1pt">FIRST</div><div style="padding:1pt">SECOND</div><div style="padding:1pt">THIRD</div></div>`)
 	if err != nil {
