@@ -92,6 +92,30 @@ func TestLayout_CSSDisplayTableLaysOutRowsAndCells(t *testing.T) {
 	}
 }
 
+func TestLayout_CSSDisplayTableWrapsDirectCellsInAnAnonymousRow(t *testing.T) {
+	root, err := boxes.Build(`<style>body{margin:0}</style><div style="display:table;width:100pt;margin:0;border-spacing:0"><span style="display:table-cell;padding:0">A</span><span style="display:table-cell;padding:0">B</span></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	var left, right *PlacedBox
+	for _, block := range Flow(root, opts)[0].Blocks {
+		switch block.Text {
+		case "A":
+			left = &block
+		case "B":
+			right = &block
+		}
+	}
+	if left == nil || right == nil {
+		t.Fatalf("anonymous row cells missing: left=%v right=%v", left != nil, right != nil)
+	}
+	if left.X != 0 || right.X != 50 {
+		t.Errorf("anonymous row cell positions x=%g/%gpt, want 0/50pt", left.X, right.X)
+	}
+}
+
 func TestLayout_SeparateTableUsesBrowserDefaultBorderSpacing(t *testing.T) {
 	root, err := boxes.Build(`<style>body{margin:0}table{width:100pt;margin:0}td{padding:0;font:10pt/12pt Helvetica}</style><table><tr><td>A</td><td>B</td></tr></table>`)
 	if err != nil {

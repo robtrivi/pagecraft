@@ -715,30 +715,55 @@ func alignTableSpanContent(span *tableSpanningCell, placedCell *PlacedBox, colla
 // footer groups retain their browser-defined order around the body rows.
 func tableRows(t *boxes.Box) (head, body []*boxes.Box) {
 	var foot []*boxes.Box
+	var anonymousCells []*boxes.Box
+	flushAnonymousRow := func() {
+		if len(anonymousCells) == 0 {
+			return
+		}
+		body = append(body, &boxes.Box{
+			Tag:      "anonymous-table-row",
+			Style:    boxes.ComputedStyle{Display: boxes.DisplayTableRow},
+			Parent:   t,
+			Children: anonymousCells,
+		})
+		anonymousCells = nil
+	}
+
 	for _, c := range t.Children {
 		switch {
+		case isTableCell(c):
+			anonymousCells = append(anonymousCells, c)
 		case isTableRow(c):
+			flushAnonymousRow()
 			body = append(body, c)
 		case c.Tag == "thead" || c.Style.Display == boxes.DisplayTableHeaderGroup:
+			flushAnonymousRow()
 			for _, r := range c.Children {
 				if isTableRow(r) {
 					head = append(head, r)
 				}
 			}
 		case c.Tag == "tfoot" || c.Style.Display == boxes.DisplayTableFooterGroup:
+			flushAnonymousRow()
 			for _, r := range c.Children {
 				if isTableRow(r) {
 					foot = append(foot, r)
 				}
 			}
 		case c.Tag == "tbody" || c.Style.Display == boxes.DisplayTableRowGroup:
+			flushAnonymousRow()
 			for _, r := range c.Children {
 				if isTableRow(r) {
 					body = append(body, r)
 				}
 			}
+		case isTableColumn(c) || isTableColumnGroup(c) || c.Style.Display == boxes.DisplayTableCaption:
+			flushAnonymousRow()
+		default:
+			flushAnonymousRow()
 		}
 	}
+	flushAnonymousRow()
 	return head, append(body, foot...)
 }
 
