@@ -590,17 +590,11 @@ func splitSpaces(seg string, keep bool) ([]preWord, int) {
 	return words, lead
 }
 
-// inlineHeight sums line heights (maximum font size per line; default if empty).
+// inlineHeight sums the line boxes that actually exist. Empty blocks have no
+// anonymous line box; explicit dimensions and insets determine their height.
 func inlineHeight(lines []inlineStream, b *boxes.Box, opts Options) float64 {
 	if len(lines) == 0 {
-		fs := resolveSize(b, opts)
-		if b.Style.LineHeightPt > 0 {
-			return b.Style.LineHeightPt
-		}
-		if b.Style.LineHeight > 0 {
-			return fs * b.Style.LineHeight
-		}
-		return lineHeightFor(b, fs, opts)
+		return 0
 	}
 	h := 0.0
 	for _, ln := range lines {

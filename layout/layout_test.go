@@ -172,6 +172,24 @@ func testOptions() Options {
 	}
 }
 
+func TestLayout_EmptyBlockUsesDeclaredHeightWithoutAnonymousLine(t *testing.T) {
+	root, err := boxes.Build(`<div style="height:3mm"></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 200, 100, 0
+	opts.FontSize = 9
+	blocks := Flow(root, opts)[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks=%d, want 1", len(blocks))
+	}
+	want := 3 * 72 / 25.4
+	if !approx(blocks[0].Height, want) {
+		t.Errorf("empty block height=%gpt, want declared 3mm (%gpt) without an anonymous line box", blocks[0].Height, want)
+	}
+}
+
 func TestLayout_LongDocument_SplitsPages(t *testing.T) {
 	root, err := boxes.Build(strings.Repeat(`<p style="margin: 0">Hello world</p>`, 100))
 	if err != nil {
