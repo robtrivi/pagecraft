@@ -353,7 +353,9 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 					if col == n-1 && count < left && count > 0 {
 						recordColumnShortage(&shortage, columnTextLineOverflow(item, lineOffset, lineOffset+count, yc, columnLimit, it, opts))
 					}
-					if col == n-1 || count > left {
+					if col == n-1 && row.rowIndex == 0 && target < bottom-y-fragmentEpsilon && count < left {
+						count = left
+					} else if count > left {
 						count = left
 					}
 					if count < 1 {
@@ -450,7 +452,8 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 			if container.Style.ColumnFill == boxes.ColumnFillAuto {
 				target = math.Max(0, bottom-y)
 			} else if balance {
-				target = balancedColumnRowTarget(splitColumnContentRuns(kids[index:], layouts[index:], opts), n, math.Max(0, bottom-y))
+				remainingKids, remainingLayouts := remainingColumnContent(kids, layouts, index, lineOffset, opts, colW)
+				target = balancedColumnRowTarget(splitColumnContentRuns(remainingKids, remainingLayouts, opts), n, math.Max(0, bottom-y))
 			}
 		}
 	}
@@ -496,6 +499,32 @@ func flowColumnFragments(container *boxes.Box, kids []*boxes.Box, layouts []colu
 		shortage = 0
 	}
 	return end, shortage
+}
+
+func remainingColumnContent(kids []*boxes.Box, layouts []columnItemLayout, index, lineOffset int, opts Options, columnWidth float64) ([]*boxes.Box, []columnItemLayout) {
+	remainingKids := append([]*boxes.Box(nil), kids[index:]...)
+	remainingLayouts := append([]columnItemLayout(nil), layouts[index:]...)
+	if len(remainingKids) == 0 || lineOffset <= 0 || len(remainingLayouts) == 0 {
+		return remainingKids, remainingLayouts
+	}
+	item := remainingKids[0]
+	layout := remainingLayouts[0]
+	if lineOffset >= len(layout.lines) {
+		return remainingKids, remainingLayouts
+	}
+	var remainingWords inlineStream
+	for _, line := range layout.lines[lineOffset:] {
+		remainingWords = append(remainingWords, line...)
+	}
+	contentWidth := math.Max(0, columnWidth-horizontalInsets(item))
+	layout.lines = breakInlineStream(remainingWords, contentWidth, wraps(item))
+	layout.flowLines = nil
+	layout.height = inlineHeight(layout.lines, item, opts) + verticalInsets(item)
+	remainingLayouts[0] = layout
+	resumed := *item
+	resumed.Style.MarginTop = 0
+	remainingKids[0] = &resumed
+	return remainingKids, remainingLayouts
 }
 
 func balancedColumnRowTarget(runs []columnContentRun, columns int, available float64) float64 {

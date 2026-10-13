@@ -205,6 +205,43 @@ func TestLayout_ColumnBalancingFillsEarlierPageRowsBeforeLastRow(t *testing.T) {
 	}
 }
 
+func TestLayout_ColumnBalancingRebalancesRemainingParagraphLinesOnLastRow(t *testing.T) {
+	content := strings.Repeat("X ", 180)
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0">` + content + `</p></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 120, 10
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("pages=%d, want two rows of columns", len(pages))
+	}
+	lineCounts := make([]int, 0, 4)
+	for pageIndex, page := range pages {
+		if len(page.Blocks) != 2 {
+			t.Fatalf("page %d fragments=%d, want one paragraph fragment in each column", pageIndex+1, len(page.Blocks))
+		}
+		counts := [2]int{}
+		for _, block := range page.Blocks {
+			if block.FragmentainerIndex < 1 || block.FragmentainerIndex > 2 {
+				t.Fatalf("page %d fragment has column index %d", pageIndex+1, block.FragmentainerIndex)
+			}
+			counts[block.FragmentainerIndex-1] += len(block.Runs)
+		}
+		lineCounts = append(lineCounts, counts[0], counts[1])
+		if pageIndex == 0 && (counts[0] != 6 || counts[1] != 6) {
+			t.Errorf("first row line counts=%v, want 6 lines per full column", counts)
+		}
+		if pageIndex == 1 && math.Abs(float64(counts[0]-counts[1])) > 1 {
+			t.Errorf("last row line counts=%v, want balanced remaining lines", counts)
+		}
+	}
+	if lineCounts[2]+lineCounts[3] < 1 {
+		t.Fatalf("last row contains no paragraph lines: %v", lineCounts)
+	}
+}
+
 func TestLayout_ColumnFillAutoKeepsDecoratedBlocksInSourceColumn(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:3;column-gap:0;column-fill:auto"><div style="padding:1pt">FIRST</div><div style="padding:1pt">SECOND</div><div style="padding:1pt">THIRD</div></div>`)
 	if err != nil {
