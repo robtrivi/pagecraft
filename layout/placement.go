@@ -170,8 +170,15 @@ func resolveHorizontalAutoMargins(b *boxes.Box, available float64) *boxes.Box {
 	if b == nil || b.Style.Float != boxes.FloatNone || b.Style.Position != boxes.PositionStatic || (!b.Style.MarginAutoLeft && !b.Style.MarginAutoRight) {
 		return b
 	}
-	resolved := *b
 	width := usedWidth(b, math.Max(0, available-b.Style.MarginLeft-b.Style.MarginRight))
+	return resolveHorizontalAutoMarginsWithWidth(b, available, width)
+}
+
+func resolveHorizontalAutoMarginsWithWidth(b *boxes.Box, available, width float64) *boxes.Box {
+	if b == nil || (!b.Style.MarginAutoLeft && !b.Style.MarginAutoRight) {
+		return b
+	}
+	resolved := *b
 	free := math.Max(0, available-b.Style.MarginLeft-b.Style.MarginRight-width)
 	switch {
 	case b.Style.MarginAutoLeft && b.Style.MarginAutoRight:

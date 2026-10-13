@@ -76,6 +76,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 		return y
 	}
 	tableWidth := tableUsedWidth(t, grid, cols, usable, opts)
+	t = resolveHorizontalAutoMarginsWithWidth(t, usable, tableWidth)
 	colW := columnWidths(grid, cols, tableWidth, opts)
 	tableX := opts.left() + t.Style.MarginLeft
 	colX := make([]float64, cols+1)
