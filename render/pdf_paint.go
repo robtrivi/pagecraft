@@ -389,14 +389,12 @@ func drawListMarker(sb *strings.Builder, shape string, cx, cy, fontSize, r, g, b
 func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex map[*images.Raster]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, gs map[float64]int) {
 	var lastOpaqueFill [3]float64
 	hasLastOpaqueFill := false
-	if b.LetterSpacing != 0 {
-		fmt.Fprintf(sb, "%g Tc\n", b.LetterSpacing)
-	}
 	for _, ln := range b.Runs {
 		for _, run := range ln {
 			for _, inlineDecoration := range run.InlineDecorations {
 				decoration := inlineDecoration.Box
-				decoration.X = run.X + inlineDecoration.OffsetX
+				runX, _ := paintedTextRunGeometry(b, run)
+				decoration.X = runX + inlineDecoration.OffsetX
 				decoration.Y = run.LineY + inlineDecoration.OffsetY
 				drawBackground(sb, decoration, pageH, gs)
 			}
@@ -416,6 +414,7 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 				baseline = r.FontSize
 			}
 			pdfY := pageH - r.Y - baseline
+			runX, runWidth := paintedTextRunGeometry(b, r)
 			fname, draw := runFont(r, fontIndex)
 			var cr, cg, cb float64
 			if r.HasColor {
@@ -438,7 +437,7 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 					sb.WriteByte('\n')
 					pen := 0.0
 					if r.Shaped.RightToLeft {
-						pen = r.Width
+						pen = runWidth
 						for _, glyph := range r.Shaped.Glyphs {
 							pen -= glyph.Advance + r.LetterSpacing
 							gid := glyph.ID
@@ -447,7 +446,7 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 									gid = compact
 								}
 							}
-							fmt.Fprintf(sb, "1 0 0 1 %g %g Tm <%04X> Tj\n", r.X+pen+glyph.XOffset, pdfY+glyph.YOffset, gid)
+							fmt.Fprintf(sb, "1 0 0 1 %g %g Tm <%04X> Tj\n", runX+pen+glyph.XOffset, pdfY+glyph.YOffset, gid)
 						}
 					} else {
 						for _, glyph := range r.Shaped.Glyphs {
@@ -457,7 +456,7 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 									gid = compact
 								}
 							}
-							fmt.Fprintf(sb, "1 0 0 1 %g %g Tm <%04X> Tj\n", r.X+pen+glyph.XOffset, pdfY+glyph.YOffset, gid)
+							fmt.Fprintf(sb, "1 0 0 1 %g %g Tm <%04X> Tj\n", runX+pen+glyph.XOffset, pdfY+glyph.YOffset, gid)
 							pen += glyph.Advance + r.LetterSpacing
 						}
 					}
@@ -467,26 +466,46 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 					sb.WriteString("ET\n")
 				} else {
 					fmt.Fprintf(sb, "BT /%s %g Tf", fname, r.FontSize)
+					if r.LetterSpacing != 0 {
+						fmt.Fprintf(sb, " %g Tc", r.LetterSpacing)
+					}
 					if r.ListMarkerShape != "" {
 						sb.WriteString(" 3 Tr")
 					}
-					fmt.Fprintf(sb, " %g %g Td %s", r.X, pdfY, draw)
+					fmt.Fprintf(sb, " %g %g Td %s", runX, pdfY, draw)
+					if r.LetterSpacing != 0 {
+						sb.WriteString("\n0 Tc\n")
+					}
 					if r.ListMarkerShape != "" {
 						sb.WriteString(" 0 Tr")
 					}
 					sb.WriteString(" ET\n")
 				}
 				if r.ListMarkerShape != "" {
-					drawListMarker(sb, r.ListMarkerShape, r.X+r.Width/2, pdfY+r.FontSize*0.32, r.FontSize, cr, cg, cb)
+					drawListMarker(sb, r.ListMarkerShape, runX+runWidth/2, pdfY+r.FontSize*0.32, r.FontSize, cr, cg, cb)
 				} else {
-					drawDecoration(sb, r.Width, cr, cg, cb, r.HasColor, r.Underline, r.Strike, r.FontSize, r.X, pdfY)
+					drawDecoration(sb, runWidth, cr, cg, cb, r.HasColor, r.Underline, r.Strike, r.FontSize, runX, pdfY)
 				}
 			})
 		}
 	}
-	if b.LetterSpacing != 0 {
-		sb.WriteString("0 Tc\n")
+}
+
+func paintedTextRunGeometry(block layout.PlacedBox, run layout.TextRun) (x, width float64) {
+	x, width = run.X, run.Width
+	if run.Image != nil || run.LetterSpacing == 0 {
+		return x, width
 	}
+	// Layout reserves spacing after every character; painted glyphs only include
+	// the spacing between characters, so align against the painted text advance.
+	width = math.Max(0, width-run.LetterSpacing)
+	switch block.Align {
+	case "right":
+		x += run.LetterSpacing
+	case "center":
+		x += run.LetterSpacing / 2
+	}
+	return x, width
 }
 
 // runFont selects the font and encoding for a text run.
