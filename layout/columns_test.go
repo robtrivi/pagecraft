@@ -92,6 +92,22 @@ func TestLayout_ColumnTextBreakAfterPageStartsFollowingBlockOnNewPage(t *testing
 	}
 }
 
+func TestLayout_ColumnTextBreakAfterPageStartsDecoratedBlockOnNewPage(t *testing.T) {
+	root, err := boxes.Build(`<div style="column-count:2;column-gap:0"><p style="margin:0;break-after:page">FIRST PAGE TEXT</p><div style="padding:1pt;background:#eee">NEXT PAGE BLOCK</div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	opts := testOptions()
+	opts.PageWidth, opts.PageHeight, opts.Margin = 220, 160, 10
+	pages := Flow(root, opts)
+	if len(pages) != 2 {
+		t.Fatalf("pages=%d, want 2", len(pages))
+	}
+	if pageContainsText(pages[0], "NEXT PAGE BLOCK") || !pageContainsText(pages[1], "NEXT PAGE BLOCK") {
+		t.Fatal("break-after:page must apply when the following column fragment is a decorated block")
+	}
+}
+
 func TestLayout_ColumnsPreserveDirectInlineContentAcrossForcedPageBreak(t *testing.T) {
 	root, err := boxes.Build(`<div style="column-count:2;break-after:page">COLUMN CONTENT</div><p>AFTER MARK</p>`)
 	if err != nil {
