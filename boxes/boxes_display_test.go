@@ -27,3 +27,13 @@ func TestBoxes_ParsesCSSDisplayTableRoles(t *testing.T) {
 		t.Fatalf("display roles = %q/%q/%q, want table/table-row/table-cell", table.Style.Display, row.Style.Display, cell.Style.Display)
 	}
 }
+
+func TestBoxes_ParsesCSSDisplayInlineBlock(t *testing.T) {
+	root, err := Build(`<span style="display:inline-block">NOTICE</span>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := root.Children[0].Style.Display; got != Display("inline-block") {
+		t.Fatalf("display = %q, want inline-block", got)
+	}
+}

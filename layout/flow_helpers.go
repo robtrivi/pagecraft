@@ -141,6 +141,9 @@ func inlinePartChild(child *boxes.Box) bool {
 	if child.Style.Display == boxes.DisplayInline {
 		return true
 	}
+	if child.Style.Display == boxes.DisplayInlineBlock {
+		return true
+	}
 	switch child.Tag {
 	case "a", "b", "code", "of-the", "em", "i", "s", "small", "strong", "sub", "sup", "strike", "u":
 		return true

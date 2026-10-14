@@ -12,6 +12,7 @@ const (
 	DisplayNone             Display = "none"
 	DisplayBlock            Display = "block"
 	DisplayInline           Display = "inline"
+	DisplayInlineBlock      Display = "inline-block"
 	DisplayFlex             Display = "flex"
 	DisplayGrid             Display = "grid"
 	DisplayTable            Display = "table"
@@ -215,6 +216,8 @@ func parseDisplay(value string) (Display, bool) {
 		return DisplayBlock, true
 	case "inline":
 		return DisplayInline, true
+	case "inline-block":
+		return DisplayInlineBlock, true
 	case "flex":
 		return DisplayFlex, true
 	case "grid":

@@ -441,9 +441,13 @@ func appendFlattenInlineDraftsInPlace(out []inlineDraft, b *boxes.Box, maxWidth 
 			}
 		}
 	}
-	if b.Style.Display == boxes.DisplayInline && len(out) > start {
+	if (b.Style.Display == boxes.DisplayInline || b.Style.Display == boxes.DisplayInlineBlock) && len(out) > start {
 		startInset := b.Style.BorderLeft.Width + b.Style.PaddingLeft
 		endInset := b.Style.BorderRight.Width + b.Style.PaddingRight
+		if b.Style.Display == boxes.DisplayInlineBlock {
+			startInset += b.Style.MarginLeft
+			endInset += b.Style.MarginRight
+		}
 		out[start].inlineStartInset += startInset
 		out[start].w += startInset
 		out[len(out)-1].inlineEndInset += endInset
@@ -724,13 +728,32 @@ func lineHeightW(line inlineStream, block *boxes.Box, opts Options) float64 {
 		}
 		maxImageHeight = max(maxImageHeight, w.imageH)
 	}
-	textHeight := lineHeightFor(block, maxfs, opts)
+	textHeight, baseline := inlineLineMetrics(line, block, maxfs, opts)
 	if maxImageHeight == 0 {
 		return textHeight
 	}
-	baseline := lineBaselineOffset(block, maxfs, textHeight, opts)
 	descent := max(0, textHeight-baseline)
 	return max(textHeight, max(maxImageHeight, baseline)+descent)
+}
+
+// inlineLineMetrics expands a line around its baseline for atomic inline-block
+// descendants, including their margins and border-box insets.
+func inlineLineMetrics(line inlineStream, block *boxes.Box, fs float64, opts Options) (float64, float64) {
+	height := lineHeightFor(block, fs, opts)
+	baseline := lineBaselineOffset(block, fs, height, opts)
+	above, below := baseline, math.Max(0, height-baseline)
+	for _, word := range line {
+		child := word.src
+		if child == nil || child.Style.Display != boxes.DisplayInlineBlock {
+			continue
+		}
+		childHeight := lineHeightFor(child, word.fs, opts)
+		childBaseline := lineBaselineOffset(child, word.fs, childHeight, opts)
+		insets := boxInsets(child)
+		above = math.Max(above, childBaseline+insets.top+child.Style.MarginTop)
+		below = math.Max(below, childHeight-childBaseline+insets.bottom+child.Style.MarginBottom)
+	}
+	return above + below, above
 }
 
 func lineHeightFor(block *boxes.Box, fs float64, opts Options) float64 {
@@ -978,7 +1001,14 @@ func assignRunsWithFinalLine(block *boxes.Box, lines []inlineStream, contentX, c
 				baselineFs = resolveSize(lineSource, opts)
 			}
 		}
-		baselineOffset := lineBaselineOffset(baselineBlock, baselineFs, lh, opts)
+		lineBlock := baselineBlock
+		for _, word := range ln {
+			if word.src != nil && word.src.Style.Display == boxes.DisplayInlineBlock {
+				lineBlock, baselineFs = block, resolveSize(block, opts)
+				break
+			}
+		}
+		_, baselineOffset := inlineLineMetrics(ln, lineBlock, baselineFs, opts)
 		imageShift := 0.0
 		for _, word := range ln {
 			if word.kind == inlineHardBreak {
@@ -1013,11 +1043,18 @@ func assignRunsWithFinalLine(block *boxes.Box, lines []inlineStream, contentX, c
 				continue
 			}
 			s := w.src
+			verticalOffset := 0.0
+			runBaselineOffset, runLineHeight := baselineOffset, lh
+			if s != nil && s.Style.Display == boxes.DisplayInlineBlock {
+				runLineHeight = lineHeightFor(s, w.fs, opts)
+				runBaselineOffset = lineBaselineOffset(s, w.fs, runLineHeight, opts)
+				verticalOffset += baselineOffset - runBaselineOffset
+			}
 			runX := x + w.inlineStartInset
 			runWidth := math.Max(0, w.w-w.inlineStartInset-w.inlineEndInset)
 			// Vertical offset in top-down coordinates: compensate for the
 			// shrinkage (base-fs) plus the spacing adjustment in em units of the base.
-			ry := y + max(0, imageShift)
+			ry := y + max(0, imageShift) + verticalOffset
 			switch s.Style.VAlign {
 			case "super":
 				ry += (baseFs - w.fs) - 0.33*baseFs
@@ -1025,11 +1062,11 @@ func assignRunsWithFinalLine(block *boxes.Box, lines []inlineStream, contentX, c
 				ry += (baseFs - w.fs) + 0.2*baseFs
 			}
 			rr = append(rr, TextRun{
-				Text: w.text, Shaped: w.shaped, X: runX, Y: ry, BaselineOffset: baselineOffset, Width: runWidth, LineH: lh, FontSize: w.fs,
+				Text: w.text, Shaped: w.shaped, X: runX, Y: ry, BaselineOffset: runBaselineOffset, Width: runWidth, LineH: runLineHeight, FontSize: w.fs,
 				Bold: s.Style.Bold, Italic: s.Style.Italic, Underline: s.Style.Underline, Strike: s.Style.Strike, LetterSpacing: s.Style.LetterSpacing,
 				HasColor: s.Style.HasColor, Color: s.Style.Color, Link: s.Link, Font: w.font,
 				Alpha: runAlpha(s.Style.Color, s.Style.HasColor, boxOpacity(s)), GroupOpacity: s == block && block.Style.HasOpacity, ListMarkerShape: w.markerShape,
-				LineY: y, source: s,
+				LineY: y + verticalOffset, source: s,
 			})
 		}
 		appendInlineBoxDecorations(block, ln, rr, y, lh, opts)
@@ -1044,13 +1081,24 @@ func appendInlineBoxDecorations(block *boxes.Box, words inlineStream, runs []Tex
 		return
 	}
 	var candidates []*boxes.Box
+	seen := map[*boxes.Box]bool{}
 	var collect func(*boxes.Box)
 	collect = func(parent *boxes.Box) {
-		for _, child := range parent.Children {
-			if child.Style.Display == boxes.DisplayInline && hasInlineBoxPaint(child) {
+		visit := func(child *boxes.Box) {
+			if child == nil || seen[child] {
+				return
+			}
+			seen[child] = true
+			if (child.Style.Display == boxes.DisplayInline || child.Style.Display == boxes.DisplayInlineBlock) && hasInlineBoxPaint(child) {
 				candidates = append(candidates, child)
 			}
 			collect(child)
+		}
+		for _, child := range parent.Children {
+			visit(child)
+		}
+		for _, part := range parent.Parts {
+			visit(part.Child)
 		}
 	}
 	collect(block)
@@ -1090,7 +1138,12 @@ func appendInlineBoxDecorations(block *boxes.Box, words inlineStream, runs []Tex
 		if ends {
 			right += rightInset
 		}
-		decoration := placed(candidate, "", nil, left, y-topInset, math.Max(0, right-left), lineHeight+topInset+bottomInset, resolveSize(candidate, opts), fontFor(opts, candidate))
+		decorationLineHeight := lineHeight
+		if candidate.Style.Display == boxes.DisplayInlineBlock {
+			decorationLineHeight = lineHeightFor(candidate, resolveSize(candidate, opts), opts)
+		}
+		verticalOffset := runs[first].LineY - y
+		decoration := placed(candidate, "", nil, left, y+verticalOffset-topInset, math.Max(0, right-left), decorationLineHeight+topInset+bottomInset, resolveSize(candidate, opts), fontFor(opts, candidate))
 		decoration.BorderWidth = 0
 		if !starts {
 			decoration.BorderLeft.Width = 0
