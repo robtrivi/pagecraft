@@ -45,6 +45,33 @@ func TestLayout_FloatRight_PlacesAside(t *testing.T) {
 	}
 }
 
+func TestLayout_InlineRightFloatAlignsAtContainingBlockEdge(t *testing.T) {
+	root, err := boxes.Build(`<div style="margin:0">TITLE <span style="float:right">NOTICE</span></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var noticeX float64
+	var titleX float64
+	for _, block := range Flow(root, testOptions())[0].Blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				switch run.Text {
+				case "NOTICE":
+					noticeX = run.X
+				case "TITLE":
+					titleX = run.X
+				}
+			}
+		}
+	}
+	if noticeX < 400 {
+		t.Errorf("inline float starts at x=%g, want it aligned to the containing block's right edge", noticeX)
+	}
+	if titleX < 72 || titleX >= noticeX {
+		t.Errorf("title x=%g should remain before the right float at x=%g", titleX, noticeX)
+	}
+}
+
 func TestLayout_FloatInsideTransparentBlockKeepsItsCoordinateAndExclusion(t *testing.T) {
 	root, err := boxes.Build(`<section><h2 style="margin:0">Scope and method</h2><aside style="float:right;width:120pt;padding:8pt;border:1pt solid #111;background:#fff7ed"><b>REVIEW WINDOW</b><br>03–12 September 2026<br><br><b>LEAD REVIEWER</b><br>Elena Ruiz</aside><p style="margin:0">Reviewers visited North Harbor, Mill Creek, East Yard and Ridgeway. Each visit included a walk-through, a sample of work orders, interviews with supervisors and a check of training records. Evidence was assessed against the internal safety handbook and maintenance schedule.</p></section>`)
 	if err != nil {

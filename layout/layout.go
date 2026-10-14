@@ -794,6 +794,9 @@ func flowLayout(root *boxes.Box, opts Options) ([]Page, float64) {
 			}
 			pageIdx := len(pages) - 1
 			floats = floatsOnPage(floats, pageIdx)
+			for _, floatBox := range inlineFloatChildren(it) {
+				floats = append(floats, flowFloat(floatBox, y, &pages, opts, usable, bottom))
+			}
 			bx := opts.left() + it.Style.MarginLeft
 			bw := width
 			var positionedLines []inlineLine

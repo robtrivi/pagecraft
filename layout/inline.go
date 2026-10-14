@@ -144,6 +144,10 @@ func collectInlineDraftsWithScope(b *boxes.Box, opts Options, scope *inlineScope
 			}
 		} else if p.Child.Tag == "br" {
 			out = appendHardBreakDraft(out, b, opts)
+		} else if p.Child.Style.Float != boxes.FloatNone {
+			// Floated inline descendants participate in the surrounding block's
+			// float context; their contents are emitted by flowFloat instead.
+			continue
 		} else if b.Tag == "li" && (p.Child.Tag == "ul" || p.Child.Tag == "ol") {
 			continue
 		} else if inlinePartChild(p.Child) {

@@ -6,6 +6,16 @@ import (
 	"github.com/robtrivi/pagecraft/boxes"
 )
 
+func inlineFloatChildren(box *boxes.Box) []*boxes.Box {
+	var floats []*boxes.Box
+	for _, part := range box.Parts {
+		if part.Child != nil && part.Child.Style.Float != boxes.FloatNone {
+			floats = append(floats, part.Child)
+		}
+	}
+	return floats
+}
+
 // Float wrapping (v1): a float is placed at the margin without advancing the
 // cursor (as in CSS); following content flows beside or below it through
 // wrapPlacement. Floats stackvertically (drop in Flow).
