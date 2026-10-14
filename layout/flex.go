@@ -314,7 +314,7 @@ func flowFlexColumn(f *boxes.Box, y float64, pages *[]Page, opts Options, usable
 			itemOpts := opts.withinPageHorizontalRange(x, width)
 			if flexItemHasBlockFlow(item) {
 				itemBox := withUsedBorderBoxWidth(item, width)
-				y = flowNestedContainer(itemBox, y, boxInsets(itemBox), nestedContainerItems(itemBox), false, pages, itemOpts, width)
+				y = flowFlexBlockItem(itemBox, y, pages, itemOpts, width, bottom)
 			} else {
 				y = flowInlineBlockFragments(item, metrics.lines, x, width, y, bottom, pages, itemOpts)
 			}
@@ -422,7 +422,7 @@ func flowFlexRow(f *boxes.Box, row flexRow, y, rowHeight float64, widths []float
 			}
 			firstPage := len(*pages) - 1
 			firstBlock := (*pages)[firstPage].blockCount()
-			flowNestedContainer(itemBox, itemY, boxInsets(itemBox), nestedContainerItems(itemBox), false, pages, itemOpts, widths[index])
+			flowFlexBlockItem(itemBox, itemY, pages, itemOpts, widths[index], opts.pageBottom())
 			if overflowClip != nil {
 				for pageIndex := firstPage; pageIndex < len(*pages); pageIndex++ {
 					blockIndex := 0

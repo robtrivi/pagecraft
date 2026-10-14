@@ -104,6 +104,25 @@ func TestRender_CollapsedTableOuterBorderKeepsFullThickness(t *testing.T) {
 	}
 }
 
+func TestRender_CollapsedTableBordersAndCellPaddingInsideFlexItem(t *testing.T) {
+	html := `<style>@page{size:240pt 160pt;margin:20pt}body{margin:0}.summary{display:flex;gap:8pt}.notes{width:120pt}.totals{width:100pt;border-collapse:collapse;font:8pt Helvetica}.totals td{padding:4pt 3pt;border-bottom:1pt solid #e1e5e6}.totals tr:last-child td{border-top:2pt solid #173b45}</style><section class="summary"><div class="notes">NOTES</div><table class="totals"><tr><td>Subtotal</td><td>100.00</td></tr><tr><td>Discount</td><td>5.00</td></tr><tr><td>Total</td><td>95.00</td></tr></table></section>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	gray := "0.8823529411764706 0.8980392156862745 0.9019607843137255 rg"
+	if count := strings.Count(content, gray); count < 2 {
+		t.Errorf("expected collapsed row separators to paint across the total rows; gray border segments=%d, content stream:\n%s", count, content)
+	}
+	if !strings.Contains(content, "(Subtotal)") || !strings.Contains(content, "(95.00)") {
+		t.Fatal("table content is missing")
+	}
+	if !regexp.MustCompile(`0\.8823529411764706 0\.8980392156862745 0\.9019607843137255 rg [0-9.]+ [0-9.]+ [0-9.]+ 1 re f`).MatchString(content) {
+		t.Errorf("row separator must retain its CSS 1pt thickness; content stream:\n%s", content)
+	}
+}
+
 func TestRender_RepeatedHeaderKeepsItsPaintLayers(t *testing.T) {
 	var body strings.Builder
 	body.WriteString(`<table style="margin:0"><thead style="background:#163b64;color:white"><tr><th>REPEATED HEADER</th></tr></thead><tbody>`)
