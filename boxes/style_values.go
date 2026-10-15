@@ -341,6 +341,8 @@ func parseFlexAlignment(value string, allowAuto, allowStretch bool) (FlexAlignme
 		return AlignFlexStart, true
 	case "flex-end":
 		return AlignFlexEnd, true
+	case "end":
+		return AlignFlexEnd, true
 	case "baseline":
 		return AlignBaseline, true
 	default:

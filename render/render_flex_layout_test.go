@@ -35,3 +35,33 @@ func TestRender_FlexColumnItemKeepsMultilineContentInFlow(t *testing.T) {
 		t.Errorf("note overlaps the amount line: amount bounds=%g..%gpt, note top=%gpt", amount.Y, amount.Y+amount.Height, note.Y)
 	}
 }
+
+func TestRender_FlexAlignItemsEndAlignsShortItemWithMultilineItemBottom(t *testing.T) {
+	html := `<style>
+@page{size:A4;margin:12mm 13mm 13mm}body{margin:0;font:6.5pt Arial,sans-serif}
+.footer{display:flex;justify-content:space-between;align-items:end;gap:4mm;border-top:1px solid #c8d0d4;padding-top:2.5mm}
+.footer>div:first-child{flex:1}.footer span,.footer strong{display:block}.footer span{font-size:5.7pt;letter-spacing:.4px}.footer code{font:6.5pt monospace;display:block;margin-top:1mm}.footer>div:nth-child(2){min-width:37mm}.footer>div:nth-child(2) strong{margin-top:1mm;font-size:6.5pt}.footer>b{font-size:6pt;white-space:nowrap}
+</style><footer class="footer"><div><span>ACCESS KEY</span><code>1234567890123456789012345678901234567890123456789</code></div><div><span>AUTHORIZATION DATE AND TIME</span><strong>14/10/2026 · 11:28:04</strong></div><b>PAGE 2 OF 2</b></footer>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	words := wordsFromPDF(t, pdf)
+	wordY := func(text string) float64 {
+		t.Helper()
+		for _, word := range words {
+			if word.Text == text {
+				return word.Y
+			}
+		}
+		t.Fatalf("%q is missing from the PDF", text)
+		return 0
+	}
+	labelY, dateY, pageY := wordY("AUTHORIZATION"), wordY("14/10/2026"), wordY("PAGE")
+	if dateY-labelY < 7 {
+		t.Errorf("authorization date is not below its label: label top=%gpt, date top=%gpt", labelY, dateY)
+	}
+	if delta := pageY - dateY; delta < -1.5 || delta > 1.5 {
+		t.Errorf("page count top=%gpt, want aligned with date top=%gpt (±1.5pt)", pageY, dateY)
+	}
+}
