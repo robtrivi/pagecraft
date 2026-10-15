@@ -208,6 +208,9 @@ func flexLineFreeSpace(availableWidth, gap float64, bases, targets []float64, fr
 }
 
 func flexItemHasBlockFlow(item *boxes.Box) bool {
+	if item.Style.Display == boxes.DisplayFlex {
+		return true
+	}
 	for _, part := range item.Parts {
 		if part.Child != nil && !inlinePartChild(part.Child) {
 			return true
@@ -226,14 +229,16 @@ func measureFlexItemHeight(item *boxes.Box, width float64, opts Options) float64
 	return flowFlexBlockItem(item, 0, &pages, measureOpts, width, measureOpts.pageBottom())
 }
 
-// flowFlexBlockItem preserves the formatting context of flex items that are
-// themselves tables. A table's rows cannot be laid out as ordinary block
-// children: doing so loses the table grid, cell spacing, and collapsed borders.
+// flowFlexBlockItem preserves the formatting context of nested flex items and
+// tables instead of flattening their children into ordinary block flow.
 func flowFlexBlockItem(item *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
 	if isTableFormattingContext(item) {
 		y += item.Style.MarginTop
 		y = flowTable(item, y, pages, opts, usable, bottom)
 		return y + item.Style.MarginBottom
+	}
+	if item.Style.Display == boxes.DisplayFlex {
+		return flowFlex(item, y, pages, opts, usable, bottom)
 	}
 	return flowNestedContainer(item, y, boxInsets(item), nestedContainerItems(item), false, pages, opts, usable)
 }
