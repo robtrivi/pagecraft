@@ -208,7 +208,7 @@ func flexLineFreeSpace(availableWidth, gap float64, bases, targets []float64, fr
 }
 
 func flexItemHasBlockFlow(item *boxes.Box) bool {
-	if item.Style.Display == boxes.DisplayFlex {
+	if item.Style.Display == boxes.DisplayFlex || item.Style.Display == boxes.DisplayGrid || isMultiColumn(item) || isTableFormattingContext(item) {
 		return true
 	}
 	for _, part := range item.Parts {
@@ -229,8 +229,8 @@ func measureFlexItemHeight(item *boxes.Box, width float64, opts Options) float64
 	return flowFlexBlockItem(item, 0, &pages, measureOpts, width, measureOpts.pageBottom())
 }
 
-// flowFlexBlockItem preserves the formatting context of nested flex items and
-// tables instead of flattening their children into ordinary block flow.
+// flowFlexBlockItem preserves nested formatting contexts instead of flattening
+// their children into ordinary block flow.
 func flowFlexBlockItem(item *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) float64 {
 	if isTableFormattingContext(item) {
 		y += item.Style.MarginTop
@@ -239,6 +239,12 @@ func flowFlexBlockItem(item *boxes.Box, y float64, pages *[]Page, opts Options, 
 	}
 	if item.Style.Display == boxes.DisplayFlex {
 		return flowFlex(item, y, pages, opts, usable, bottom)
+	}
+	if item.Style.Display == boxes.DisplayGrid {
+		return flowGrid(item, y, pages, opts, usable, bottom)
+	}
+	if isMultiColumn(item) {
+		return flowColumns(item, y, pages, opts, usable, bottom)
 	}
 	return flowNestedContainer(item, y, boxInsets(item), nestedContainerItems(item), false, pages, opts, usable)
 }

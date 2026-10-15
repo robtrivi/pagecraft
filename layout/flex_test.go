@@ -1209,6 +1209,54 @@ func TestLayout_FlexItemPreservesNestedBlockComposition(t *testing.T) {
 	}
 }
 
+func TestLayout_FlexItemPreservesNestedGridContext(t *testing.T) {
+	root, err := boxes.Build(`<div style="display:flex"><div style="display:grid;width:120pt;grid-template-columns:50pt 70pt"><span>ALPHA</span><span>BETA</span></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	runs := map[string]TextRun{}
+	for _, block := range blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				runs[run.Text] = run
+			}
+		}
+	}
+	alpha, hasAlpha := runs["ALPHA"]
+	beta, hasBeta := runs["BETA"]
+	if !hasAlpha || !hasBeta {
+		t.Fatalf("grid item content missing: ALPHA=%t BETA=%t", hasAlpha, hasBeta)
+	}
+	if got := beta.X - alpha.X; !approx(got, 50) {
+		t.Errorf("grid column offset=%gpt, want 50pt", got)
+	}
+}
+
+func TestLayout_FlexItemPreservesNestedMulticolumnContext(t *testing.T) {
+	root, err := boxes.Build(`<div style="display:flex"><div style="width:120pt;column-count:2;column-gap:0"><p style="margin:0">A</p><p style="margin:0">B</p><p style="margin:0">C</p><p style="margin:0">D</p></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	blocks := Flow(root, testOptions())[0].Blocks
+	positions := map[string]TextRun{}
+	for _, block := range blocks {
+		for _, line := range block.Runs {
+			for _, run := range line {
+				positions[run.Text] = run
+			}
+		}
+	}
+	for _, word := range []string{"A", "B", "C", "D"} {
+		if _, ok := positions[word]; !ok {
+			t.Fatalf("multicolumn content %q missing; got %v", word, positions)
+		}
+	}
+	if positions["A"].X != positions["B"].X || positions["C"].X != positions["D"].X || positions["C"].X <= positions["A"].X {
+		t.Errorf("nested columns not preserved: A=%+v B=%+v C=%+v D=%+v", positions["A"], positions["B"], positions["C"], positions["D"])
+	}
+}
+
 func TestLayout_FlexWrapPlacesPercentageItemsOnMultipleRows(t *testing.T) {
 	root, err := boxes.Build(`<div style="display:flex; flex-wrap:wrap; gap:8pt"><div style="width:28%;padding:8pt;border:1pt solid #94a3b8">One</div><div style="width:28%;padding:8pt;border:1pt solid #94a3b8">Two</div><div style="width:28%;padding:8pt;border:1pt solid #94a3b8">Three</div><div style="width:28%;padding:8pt;border:1pt solid #94a3b8">Four</div><div style="width:28%;padding:8pt;border:1pt solid #94a3b8">Five</div></div>`)
 	if err != nil {
