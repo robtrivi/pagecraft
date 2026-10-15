@@ -111,8 +111,8 @@ func (b *Box) loadPage(texts []string) {
 		}
 	}
 	for _, t := range texts {
-		if chunks, ok := css.ParsePageFooter(t); ok {
-			b.PageFooter = chunks
+		if chunks, style, ok := css.ParsePageFooterStyle(t); ok {
+			b.PageFooter, b.PageFooterStyle = chunks, style
 			return
 		}
 	}

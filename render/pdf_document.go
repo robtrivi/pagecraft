@@ -10,7 +10,7 @@ import (
 	"github.com/robtrivi/pagecraft/layout"
 )
 
-func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Metadata, footer []css.ContentChunk) []byte {
+func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Metadata, footer []css.ContentChunk, footerStyle css.PageFooterStyle) []byte {
 	imgs, imgIndex := collectImages(pages)
 	svgs, svgIndex := collectSVGs(pages)
 	annots, annotPages := collectLinks(pages, opts.PageHeight)
@@ -66,7 +66,7 @@ func buildPDFFromPages(pages []layout.Page, opts layout.Options, meta boxes.Meta
 			pageBoxes, rotation, base14Refs(fontID), fontRefs(faces, fontObjBase),
 			xobjectRefs(imgs, svgs, imgBase, forms, formBase, i), extRefs(alphas, gsBase),
 			annotsRefs(annotPages[i], annotBase), pageObj+1))
-		bodies = append(bodies, contentStream(pg, pageOpts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], gsIndex, formIndex[i][0]))
+		bodies = append(bodies, contentStream(pg, pageOpts, imgIndex, svgIndex, fontIndex, fontSubsets, footers[i], footerStyle, gsIndex, formIndex[i][0]))
 	}
 	bodies = append(bodies, base14Bodies(base14)...)
 	for _, r := range imgs {

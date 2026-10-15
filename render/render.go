@@ -45,5 +45,5 @@ func RenderHTMLToPDF(htmlStr string) ([]byte, error) {
 	} else {
 		opts.HasPageBackground, opts.PageBackground = root.Style.HasBg, root.Style.Bg
 	}
-	return buildPDFFromPages(layout.Flow(root, opts), opts, root.Meta, root.PageFooter), nil
+	return buildPDFFromPages(layout.Flow(root, opts), opts, root.Meta, root.PageFooter, root.PageFooterStyle), nil
 }

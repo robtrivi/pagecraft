@@ -19,7 +19,7 @@ import (
 	"github.com/robtrivi/pagecraft/text"
 )
 
-func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Raster]int, svgIndex map[*svg.Document]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, footer string, gs map[float64]int, forms map[int]opacityFormRef) string {
+func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Raster]int, svgIndex map[*svg.Document]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, footer string, footerStyle css.PageFooterStyle, gs map[float64]int, forms map[int]opacityFormRef) string {
 	var sb strings.Builder
 	fragmentNodes := fragmentNodesByPaintIndex(pg.FragmentTree)
 	if opts.HasPageBackground {
@@ -65,7 +65,7 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 		}
 		writeClipEnd(&sb, b)
 	}
-	drawFooter(&sb, footer, opts)
+	drawFooter(&sb, footer, footerStyle, opts)
 	drawPageMarks(&sb, opts)
 	comp := flateBytes([]byte(sb.String()))
 	return fmt.Sprintf("<< /Length %d /Filter /FlateDecode >>\nstream\n%s\nendstream", len(comp), comp)
@@ -302,9 +302,6 @@ func putFlateWriter(w *zlib.Writer) {
 	flateWriters.Put(w)
 }
 
-// footerSize is the fixed footer size (v1).
-const footerSize = 10.0
-
 // expandFooters evaluates footer chunks per page (page/pages are 1-based).
 func expandFooters(footer []css.ContentChunk, total int) []string {
 	if len(footer) == 0 {
@@ -330,15 +327,22 @@ func expandFooters(footer []css.ContentChunk, total int) []string {
 }
 
 // drawFooter centers footer text (halfway through the bottom margin).
-func drawFooter(sb *strings.Builder, s string, opts layout.Options) {
+func drawFooter(sb *strings.Builder, s string, style css.PageFooterStyle, opts layout.Options) {
 	if s == "" {
 		return
 	}
-	w := text.Measure(s, footerSize)
+	fontSize := style.FontSize
+	if fontSize <= 0 {
+		fontSize = 10
+	}
+	w := text.Measure(s, fontSize)
 	x := (opts.PageWidth - w) / 2
 	y := opts.Margin / 2
+	if style.HasColor {
+		fmt.Fprintf(sb, "%g %g %g rg\n", style.Color[0], style.Color[1], style.Color[2])
+	}
 	fmt.Fprintf(sb, "BT /F1 %g Tf %g %g Td %s Tj ET\n",
-		footerSize, x, y, encodePDFString(s))
+		fontSize, x, y, encodePDFString(s))
 }
 
 // drawDecoration draws underlines (baseline-0.1em, AFM) and strike

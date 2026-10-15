@@ -13,6 +13,35 @@ type ContentChunk struct {
 	Counter string // "page" | "pages" ("" = literal)
 }
 
+// PageFooterStyle contains the supported typography and color for @bottom-center.
+type PageFooterStyle struct {
+	FontSize float64
+	Color    [4]float64
+	HasColor bool
+}
+
+// ParsePageFooterStyle reads the @bottom-center content and supported style.
+func ParsePageFooterStyle(src string) ([]ContentChunk, PageFooterStyle, bool) {
+	l := css.NewLexer(parse.NewInputString(src))
+	for {
+		tt, data := l.Next()
+		if tt == css.ErrorToken {
+			break
+		}
+		if tt != css.AtKeywordToken || !strings.EqualFold(strings.TrimPrefix(string(data), "@"), "page") {
+			continue
+		}
+		body, ok := atBody(l)
+		if !ok {
+			continue
+		}
+		if chunks, style, ok := pageFooterDetails(body); ok {
+			return chunks, style, true
+		}
+	}
+	return nil, PageFooterStyle{}, false
+}
+
 // ParsePageFooter reads @bottom-center content from the first @page rule that defines it.
 func ParsePageFooter(src string) ([]ContentChunk, bool) {
 	l := css.NewLexer(parse.NewInputString(src))
@@ -36,6 +65,11 @@ func ParsePageFooter(src string) ([]ContentChunk, bool) {
 }
 
 func pageFooterIn(pageBody string) ([]ContentChunk, bool) {
+	chunks, _, ok := pageFooterDetails(pageBody)
+	return chunks, ok
+}
+
+func pageFooterDetails(pageBody string) ([]ContentChunk, PageFooterStyle, bool) {
 	l := css.NewLexer(parse.NewInputString(pageBody))
 	for {
 		tt, data := l.Next()
@@ -55,10 +89,24 @@ func pageFooterIn(pageBody string) ([]ContentChunk, bool) {
 			continue
 		}
 		if chunks := parseContent(content); len(chunks) > 0 {
-			return chunks, true
+			style := PageFooterStyle{FontSize: 10}
+			if color, valid := ParseColor(decls["color"]); valid {
+				style.Color, style.HasColor = color, true
+			}
+			font := decls["font"]
+			if font == "" {
+				font = decls["font-size"]
+			}
+			for _, token := range strings.Fields(font) {
+				if size, valid := parseLength(token); valid {
+					style.FontSize = size
+					break
+				}
+			}
+			return chunks, style, true
 		}
 	}
-	return nil, false
+	return nil, PageFooterStyle{}, false
 }
 
 // parseContent splits quoted literals and counter(name) expressions.

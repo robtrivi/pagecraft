@@ -16,22 +16,23 @@ import (
 // Box stores a node's content, resources, and metadata.
 // Resolved CSS and user-agent values are stored in ComputedStyle.
 type Box struct {
-	Tag          string
-	sourcePath   []int
-	Style        ComputedStyle
-	Text         string
-	Image        *images.Raster            // resolved <img> only
-	SVG          *svg.Document             // <svg> inline vectorial
-	Parts        []Part                    // ordered segments (anonymous text or children)
-	Link         string                    // Link is the raw href value from <a>.
-	Fonts        map[string]*fonts.Face    // document font registry (root only)
-	FontVariants map[string]fonts.Variants // faces by weight and style
-	Page         PageConfig                // @page from the first valid rule (root only)
-	PageRules    []css.PageRule            // Ordered @page rules for page-context resolution.
-	PageFooter   []css.ContentChunk        // @bottom-center (root only)
-	Meta         Metadata                  // <title>/meta (root only)
-	Children     []*Box
-	Parent       *Box // direct structural parent in the source tree
+	Tag             string
+	sourcePath      []int
+	Style           ComputedStyle
+	Text            string
+	Image           *images.Raster            // resolved <img> only
+	SVG             *svg.Document             // <svg> inline vectorial
+	Parts           []Part                    // ordered segments (anonymous text or children)
+	Link            string                    // Link is the raw href value from <a>.
+	Fonts           map[string]*fonts.Face    // document font registry (root only)
+	FontVariants    map[string]fonts.Variants // faces by weight and style
+	Page            PageConfig                // @page from the first valid rule (root only)
+	PageRules       []css.PageRule            // Ordered @page rules for page-context resolution.
+	PageFooter      []css.ContentChunk        // @bottom-center (root only)
+	PageFooterStyle css.PageFooterStyle       // @bottom-center supported style (root only)
+	Meta            Metadata                  // <title>/meta (root only)
+	Children        []*Box
+	Parent          *Box // direct structural parent in the source tree
 }
 
 // SourcePath returns the box's stable child-index path under the document root.

@@ -27,3 +27,17 @@ func TestCSS_ParsesPageFooter_Absent(t *testing.T) {
 		t.Error("there is no footer without @page")
 	}
 }
+
+func TestCSS_ParsesPageFooterStyle(t *testing.T) {
+	chunks, style, ok := ParsePageFooterStyle(`@page { @bottom-center { content: "Page " counter(page); color: #53636b; font: 7pt Arial, sans-serif; } }`)
+	if !ok || len(chunks) != 2 {
+		t.Fatalf("footer: chunks=%+v ok=%v", chunks, ok)
+	}
+	if style.FontSize != 7 {
+		t.Errorf("font size=%g, want 7pt", style.FontSize)
+	}
+	wantColor := [4]float64{83.0 / 255, 99.0 / 255, 107.0 / 255, 1}
+	if !style.HasColor || style.Color != wantColor {
+		t.Errorf("color=%v has=%v, want %v", style.Color, style.HasColor, wantColor)
+	}
+}
