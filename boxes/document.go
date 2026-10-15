@@ -223,11 +223,48 @@ func (ss *styleSheet) cascaded(the *html.Node) css.Declarations {
 	})
 	out := css.Declarations{}
 	for _, h := range hits {
-		for k, v := range h.decls {
+		for k, v := range expandCascadeShorthands(h.decls) {
 			out[k] = v
 		}
 	}
 	return out
+}
+
+// expandCascadeShorthands applies box-model shorthands to their longhands
+// within each cascade step. This lets a more specific shorthand replace a
+// less specific longhand while still allowing a more specific longhand to win.
+func expandCascadeShorthands(decls css.Declarations) css.Declarations {
+	expanded := make(css.Declarations, len(decls)+8)
+	for property, value := range decls {
+		expanded[property] = value
+	}
+	for _, shorthand := range []struct {
+		name string
+	}{
+		{name: "margin"},
+		{name: "padding"},
+	} {
+		value, ok := decls[shorthand.name]
+		if !ok {
+			continue
+		}
+		sides, valid := expandMarginTokens(value)
+		if !valid {
+			continue
+		}
+		prefix := shorthand.name + "-"
+		for index, side := range [...]string{"top", "right", "bottom", "left"} {
+			expanded[prefix+side] = sides[index]
+		}
+	}
+	// Keep explicit longhands in the same declaration block above the
+	// shorthand expansion, consistent with the existing package contract.
+	for property, value := range decls {
+		if strings.HasPrefix(property, "margin-") || strings.HasPrefix(property, "padding-") {
+			expanded[property] = value
+		}
+	}
+	return expanded
 }
 
 // styleTexts collects <style> and <link rel=stylesheet> rules in document order.

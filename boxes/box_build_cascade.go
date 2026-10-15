@@ -32,7 +32,7 @@ func resolveBoxDeclarations(the *html.Node, inherited css.Declarations, ss *styl
 	if (the.Data == "b" || the.Data == "strong") && !hasCascadedFontWeight && !hasOwnFontWeight {
 		decls["font-weight"] = "bold"
 	}
-	for k, v := range own {
+	for k, v := range expandCascadeShorthands(own) {
 		decls[k] = v
 	}
 	if fontSize, ok := decls["font-size"]; ok {

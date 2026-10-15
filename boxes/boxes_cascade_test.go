@@ -36,3 +36,17 @@ func TestBoxes_Inline_BeatsStylesheet(t *testing.T) {
 		t.Errorf("color: got %v, want green [0 0.5 0]", c)
 	}
 }
+
+func TestBoxes_Specificity_BoxShorthandsOverrideLessSpecificLonghands(t *testing.T) {
+	root, err := Build(`<style>.fiscal-details { margin-top: 3mm; padding-top: 3mm; } .registro .fiscal-details { margin: 0; padding: 0; }</style><div class="registro"><div class="fiscal-details"></div></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	grid := root.Children[0].Children[0]
+	if grid.Style.MarginTop != 0 {
+		t.Errorf("margin-top=%v, want 0 from the more specific margin shorthand", grid.Style.MarginTop)
+	}
+	if grid.Style.PaddingTop != 0 {
+		t.Errorf("padding-top=%v, want 0 from the more specific padding shorthand", grid.Style.PaddingTop)
+	}
+}
