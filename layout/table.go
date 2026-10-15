@@ -484,6 +484,7 @@ func flowTable(t *boxes.Box, y float64, pages *[]Page, opts Options, usable, bot
 			if t.Style.BorderCollapse {
 				applyCollapsedCellBorders(&pb, collapsedBorders[cellIndex])
 			}
+			pb.TablePaintGroup = t
 			applyTablePaint(&pb, d, tableX, tableWidth, y, rh, true, true, repeated, cellIndex == 0, cellIndex == len(done)-1, t.Style.BorderCollapse, opts)
 			contentH := tableCellAllContentHeight(d, opts) + d.b.Style.PaddingTop + d.b.Style.PaddingBottom
 			borderTop, _, borderBottom, borderLeft := tableCellBorderInsets(d.b, t.Style.BorderCollapse)

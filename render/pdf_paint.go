@@ -36,6 +36,7 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 			sb.WriteString("Q\n")
 		}
 	}
+	paintedTables := make(map[*boxes.Box]bool)
 	for bi := 0; bi < len(pg.Blocks); bi++ {
 		b := pg.Blocks[bi]
 		if form, ok := forms[bi]; ok {
@@ -46,9 +47,16 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 			continue
 		}
 		writeClipStart(&sb, b, opts.PageHeight)
-		drawTablePaintLayers(&sb, b.TablePaintUnderlays, opts.PageHeight, gs, true)
-		drawBackground(&sb, b, opts.PageHeight, gs)
-		drawTablePaintLayers(&sb, b.TablePaintOverlays, opts.PageHeight, gs, false)
+		if b.TablePaintGroup != nil {
+			if !paintedTables[b.TablePaintGroup] {
+				paintTableGroup(&sb, pg.Blocks, b.TablePaintGroup, opts.PageHeight, gs)
+				paintedTables[b.TablePaintGroup] = true
+			}
+		} else {
+			drawTablePaintLayers(&sb, b.TablePaintUnderlays, opts.PageHeight, gs, true)
+			drawBackground(&sb, b, opts.PageHeight, gs)
+			drawTablePaintLayers(&sb, b.TablePaintOverlays, opts.PageHeight, gs, false)
+		}
 		if node := fragmentNodes[bi]; node != nil {
 			drawFragmentDecorations(&sb, node.Children, opts.PageHeight, gs)
 		}
@@ -196,6 +204,7 @@ func collectOpacityForms(pages []layout.Page) ([]opacityFormSpec, []map[int]map[
 func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]map[int]opacityFormRef, fragmentNodes map[int]*layout.FragmentNode, opts layout.Options,
 	imgIndex map[*images.Raster]int, svgIndex map[*svg.Document]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, gs map[float64]int, resources string) string {
 	var content strings.Builder
+	paintedTables := make(map[*boxes.Box]bool)
 	for bi := 0; bi < len(blocks); bi++ {
 		block := blocks[bi]
 		writeClipStart(&content, block, opts.PageHeight)
@@ -215,9 +224,16 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 				}
 			}
 		}
-		drawTablePaintLayers(&content, inner.TablePaintUnderlays, opts.PageHeight, gs, true)
-		drawBackground(&content, inner, opts.PageHeight, gs)
-		drawTablePaintLayers(&content, inner.TablePaintOverlays, opts.PageHeight, gs, false)
+		if inner.TablePaintGroup != nil {
+			if !paintedTables[inner.TablePaintGroup] {
+				paintTableGroup(&content, blocks, inner.TablePaintGroup, opts.PageHeight, gs)
+				paintedTables[inner.TablePaintGroup] = true
+			}
+		} else {
+			drawTablePaintLayers(&content, inner.TablePaintUnderlays, opts.PageHeight, gs, true)
+			drawBackground(&content, inner, opts.PageHeight, gs)
+			drawTablePaintLayers(&content, inner.TablePaintOverlays, opts.PageHeight, gs, false)
+		}
 		if node := fragmentNodes[form.start+bi]; node != nil {
 			drawFragmentDecorations(&content, node.Children, opts.PageHeight, gs)
 		}
@@ -236,6 +252,30 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 	compressed := flateBytes([]byte(content.String()))
 	return fmt.Sprintf("<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 %g %g] /Group << /S /Transparency /CS /DeviceRGB /I true >> /Resources %s /Length %d /Filter /FlateDecode >>\nstream\n%s\nendstream",
 		opts.PageWidth, opts.PageHeight, resources, len(compressed), compressed)
+}
+
+// paintTableGroup composes each table fragment in CSS paint order: all cell and
+// structural backgrounds first, followed by the grid and structural borders.
+func paintTableGroup(sb *strings.Builder, blocks []layout.PlacedBox, group *boxes.Box, pageHeight float64, gs map[float64]int) {
+	for _, block := range blocks {
+		if block.TablePaintGroup != group {
+			continue
+		}
+		drawTablePaintLayers(sb, block.TablePaintUnderlays, pageHeight, gs, true)
+		fill := block
+		fill.BorderWidth = 0
+		fill.BorderTop, fill.BorderRight, fill.BorderBottom, fill.BorderLeft = boxes.BorderSide{}, boxes.BorderSide{}, boxes.BorderSide{}, boxes.BorderSide{}
+		drawBackground(sb, fill, pageHeight, gs)
+	}
+	for _, block := range blocks {
+		if block.TablePaintGroup != group {
+			continue
+		}
+		border := block
+		border.HasBg = false
+		drawBackground(sb, border, pageHeight, gs)
+		drawTablePaintLayers(sb, block.TablePaintOverlays, pageHeight, gs, false)
+	}
 }
 
 func drawTablePaintLayers(sb *strings.Builder, layers []layout.TablePaintLayer, pageHeight float64, gs map[float64]int, underlay bool) {

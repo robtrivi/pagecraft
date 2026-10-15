@@ -234,8 +234,9 @@ type PlacedBox struct {
 	Image                          *images.Raster // resolved <img> content
 	SVG                            *svg.Document  // SVG inline
 	HasBg                          bool
-	CollapsedTableCell             bool    // Borders are centered on collapsed table-grid edges.
-	CollapsedBorderPaintSuppressed [4]bool // top, right, bottom, left
+	CollapsedTableCell             bool       // Borders are centered on collapsed table-grid edges.
+	CollapsedBorderPaintSuppressed [4]bool    // top, right, bottom, left
+	TablePaintGroup                *boxes.Box // Source table whose cell paint is composed in phases.
 	Bg                             [4]float64
 	BorderWidth                    float64
 	BorderCornerRadii              [4]boxes.CornerRadius

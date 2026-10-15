@@ -259,6 +259,7 @@ func placeTableRowCells(cells []tableDoneCell, ranges []tableCellLineRange, rowH
 		if collapsed {
 			applyCollapsedCellBorders(&placedCell, collapsedBorders[index])
 		}
+		placedCell.TablePaintGroup = cell.table
 		applyTablePaint(&placedCell, cell, tableX, tableWidth, y, rowHeight, firstFragment, lastFragment, repeated, index == 0, index == len(cells)-1, collapsed, opts)
 		placedCell.source = cell.b
 		placedCell = fragmentPlacedBox(placedCell, firstFragment, lastFragment)
