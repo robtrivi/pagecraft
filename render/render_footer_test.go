@@ -21,3 +21,18 @@ func TestRender_PageNumbers_DrawFooters(t *testing.T) {
 		}
 	}
 }
+
+func TestRender_PageFooter_UsesDeclaredFontSizeAndColor(t *testing.T) {
+	html := `<style>@page { @bottom-center { content: "PÁGINA " counter(page); color: #53636b; font: 7pt Arial, sans-serif; } }</style><p>body</p>`
+	got, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	stream := streamText(t, got)
+	if !strings.Contains(stream, "/F1 7 Tf") {
+		t.Errorf("footer should use declared 7pt font size; content stream: %s", stream)
+	}
+	if !strings.Contains(stream, "0.3254901960784314 0.38823529411764707 0.4196078431372549 rg") {
+		t.Errorf("footer should use declared #53636b color; content stream: %s", stream)
+	}
+}
