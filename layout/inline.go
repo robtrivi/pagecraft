@@ -9,8 +9,10 @@ import (
 	"github.com/go-text/typesetting/bidi"
 	"github.com/go-text/typesetting/language"
 	"github.com/robtrivi/pagecraft/boxes"
+	"github.com/robtrivi/pagecraft/css"
 	"github.com/robtrivi/pagecraft/fonts"
 	"github.com/robtrivi/pagecraft/images"
+	"github.com/robtrivi/pagecraft/svg"
 )
 
 // TextRun represents a positioned inline item: text or a replaced image.
@@ -19,6 +21,8 @@ type TextRun struct {
 	Shaped                          fonts.ShapedText
 	Image                           *images.Raster
 	ImageHeight                     float64
+	SVG                             *svg.Document
+	SVGHeight                       float64
 	X, Y                            float64 // Absolute X; Y is the line top.
 	BaselineOffset                  float64 // Distance from Y to the baseline.
 	Width                           float64
@@ -81,6 +85,7 @@ type inlineItem struct {
 	shaped           fonts.ShapedText
 	src              *boxes.Box
 	image            *images.Raster
+	vector           *svg.Document
 	font             *fonts.Face
 	measure          func(string, float64) float64
 	fs               float64
@@ -191,7 +196,7 @@ func itemizeInlineDraftsByBidi(drafts []inlineDraft) []inlineDraft {
 	type textRange struct{ start, end int }
 	var result []inlineDraft
 	for _, draft := range drafts {
-		if draft.text == "" || draft.image != nil || draft.kind == inlineHardBreak {
+		if draft.text == "" || draft.image != nil || draft.vector != nil || draft.kind == inlineHardBreak {
 			result = append(result, draft)
 			continue
 		}
@@ -287,7 +292,7 @@ func assignInlineParagraphBidiLevels(drafts []inlineDraft) []inlineDraft {
 		if draft.text != "" {
 			text.WriteString(draft.text)
 			runeCount += len([]rune(draft.text))
-		} else if draft.image != nil {
+		} else if draft.image != nil || draft.vector != nil {
 			text.WriteRune('\uFFFC')
 			runeCount++
 		}
@@ -314,14 +319,14 @@ func assignInlineParagraphBidiLevels(drafts []inlineDraft) []inlineDraft {
 func shapeCompatibleInlineRuns(drafts []inlineDraft) []inlineDraft {
 	for start := 0; start < len(drafts); {
 		first := drafts[start]
-		if first.image != nil || first.font == nil || first.text == "" {
+		if first.image != nil || first.vector != nil || first.font == nil || first.text == "" {
 			start++
 			continue
 		}
 		end := start + 1
 		for end < len(drafts) {
 			previous, next := drafts[end-1], drafts[end]
-			if previous.hardBreak || previous.bidiBoundary || next.bidiBoundary || previous.image != nil || next.image != nil || next.text == "" ||
+			if previous.hardBreak || previous.bidiBoundary || next.bidiBoundary || previous.image != nil || next.image != nil || previous.vector != nil || next.vector != nil || next.text == "" ||
 				previous.font != first.font || next.font != first.font || previous.fs != first.fs || next.fs != first.fs ||
 				previous.src.Style.LetterSpacing != first.src.Style.LetterSpacing || next.src.Style.LetterSpacing != first.src.Style.LetterSpacing ||
 				previous.sourceSpaceAfter || next.sourceSpaceBefore {
@@ -380,7 +385,7 @@ func resolveInlineStream(drafts []inlineDraft) inlineStream {
 				item.before.kind = inlineBreakOpportunity
 			}
 		}
-		if item.image != nil {
+		if item.image != nil || item.vector != nil {
 			item.kind = inlineImage
 		} else {
 			item.kind = inlineText
@@ -416,7 +421,7 @@ func collectFlattenInlineDraftsWithWidth(b *boxes.Box, maxWidth float64, opts Op
 
 func appendFlattenInlineDraftsInPlace(out []inlineDraft, b *boxes.Box, maxWidth float64, opts Options, scope *inlineScope) []inlineDraft {
 	start := len(out)
-	if b.Image != nil {
+	if b.Image != nil || b.SVG != nil {
 		word := inlineImageDraft(b, maxWidth, opts)
 		word.scope = scope
 		out = append(out, word)
@@ -472,11 +477,43 @@ func normalizeCJKAdjacentSpacing(words []inlineDraft) {
 }
 
 func inlineImageDraft(box *boxes.Box, maxWidth float64, opts Options) inlineDraft {
+	if box.SVG != nil {
+		width, height := inlineSVGDimensions(box, maxWidth, opts)
+		return inlineDraft{inlineItem: inlineItem{
+			src: box, vector: box.SVG, fs: resolveSize(box, opts), w: width, imageH: height,
+		}, spacesAfter: 1}
+	}
 	width, height := rasterDimensions(box, maxWidth, 0)
 	return inlineDraft{inlineItem: inlineItem{
 		src: box, image: box.Image, fs: resolveSize(box, opts),
 		w: width, imageH: height,
 	}, spacesAfter: 1}
+}
+
+func inlineSVGDimensions(box *boxes.Box, maxWidth float64, opts Options) (float64, float64) {
+	vector := box.SVG
+	width, height := vector.Width*css.PxToPt, vector.Height*css.PxToPt
+	hasWidth, hasHeight := false, false
+	if box.Style.SVGWidth > 0 {
+		width, hasWidth = box.Style.SVGWidth, true
+	} else if box.Style.SVGWidthPct > 0 && maxWidth > 0 {
+		width, hasWidth = maxWidth*box.Style.SVGWidthPct/100, true
+	}
+	if box.Style.SVGHeight > 0 {
+		height, hasHeight = box.Style.SVGHeight, true
+	} else if box.Style.SVGHeightPct > 0 && opts.space.containingSize.Block.Definite {
+		height, hasHeight = opts.space.containingSize.Block.Value*box.Style.SVGHeightPct/100, true
+	}
+	if hasWidth && !hasHeight && vector.Width > 0 {
+		height = width * vector.Height / vector.Width
+	} else if hasHeight && !hasWidth && vector.Height > 0 {
+		width = height * vector.Width / vector.Height
+	}
+	if maxWidth > 0 && width > maxWidth {
+		scale := maxWidth / width
+		width, height = maxWidth, height*scale
+	}
+	return width, height
 }
 
 func appendTextDrafts(out []inlineDraft, src *boxes.Box, text string, opts Options) []inlineDraft {
@@ -1026,7 +1063,7 @@ func assignRunsWithFinalLine(block *boxes.Box, lines []inlineStream, contentX, c
 			if i == 0 {
 				x += w.before.leadingAdvance
 			}
-			if w.image != nil {
+			if w.image != nil || w.vector != nil {
 				imageY := y + max(0, imageShift) + baselineOffset - w.imageH
 				switch w.src.Style.VAlign {
 				case "top":
@@ -1037,7 +1074,7 @@ func assignRunsWithFinalLine(block *boxes.Box, lines []inlineStream, contentX, c
 					imageY = y + lh - w.imageH
 				}
 				rr = append(rr, TextRun{
-					Image: w.image, ImageHeight: w.imageH, X: x, Y: imageY, Width: w.w,
+					Image: w.image, ImageHeight: w.imageH, SVG: w.vector, SVGHeight: w.imageH, X: x, Y: imageY, Width: w.w,
 					LineH: lh, LineY: y, FontSize: w.fs, Alpha: boxOpacity(w.src), GroupOpacity: w.src.Style.HasOpacity, source: w.src,
 				})
 				continue

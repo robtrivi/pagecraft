@@ -180,16 +180,19 @@ func TestLayout_FloatContainerKeepsSVGChild(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	blocks := Flow(root, testOptions())[0].Blocks
-	var svgBlock, wrapper *PlacedBox
+	var hasSVG bool
+	var wrapper *PlacedBox
 	for i := range blocks {
-		if blocks[i].SVG != nil {
-			svgBlock = &blocks[i]
+		for _, line := range blocks[i].Runs {
+			for _, run := range line {
+				hasSVG = hasSVG || run.SVG != nil
+			}
 		}
 		if blocks[i].HasBg && blocks[i].Width > 200 {
 			wrapper = &blocks[i]
 		}
 	}
-	if svgBlock == nil {
+	if !hasSVG {
 		t.Fatal("the float lost its descendant SVG")
 	}
 	if wrapper == nil || wrapper.Width != 204 {

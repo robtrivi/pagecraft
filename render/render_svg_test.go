@@ -20,6 +20,17 @@ func TestRender_InlineSVG_EmbedsVectorForm(t *testing.T) {
 	}
 }
 
+func TestRender_InlineSVGInFlexItem_EmbedsBesideText(t *testing.T) {
+	pdf, err := RenderHTMLToPDF(`<div style="display:flex"><span><svg style="width:5pt;height:5pt" viewBox="0 0 10 10"><rect width="10" height="10" fill="red"/></svg>BRAND</span><b>DOCUMENT</b></div>`)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	stream := streamText(t, pdf)
+	if !bytes.Contains(pdf, []byte("/Subtype /Form")) || !strings.Contains(stream, "/Sv1 Do") || !strings.Contains(stream, "(BRAND) Tj") {
+		t.Fatal("inline SVG or adjacent text was omitted from the PDF")
+	}
+}
+
 func TestRender_InlineSVG_EmitsTextInVectorForm(t *testing.T) {
 	pdf, err := RenderHTMLToPDF(`<svg width="100" height="30"><text x="4" y="20" font-size="12">JUL</text></svg>`)
 	if err != nil {

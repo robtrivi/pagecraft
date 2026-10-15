@@ -40,14 +40,14 @@ func buildReplacedContent(the *html.Node, b *Box, decls css.Declarations, ld *lo
 		}
 		b.SVG = parsed
 		if value, ok := decls["width"]; ok {
-			if size, ok := parseFontSize(value); ok {
+			if size, ok := tryLengthPx(value); ok && size > 0 {
 				b.Style.SVGWidth = size
 			} else if pct, ok := parsePercent(value); ok {
 				b.Style.SVGWidthPct = pct
 			}
 		}
 		if value, ok := decls["height"]; ok {
-			if size, ok := parseFontSize(value); ok {
+			if size, ok := tryLengthPx(value); ok && size > 0 {
 				b.Style.SVGHeight = size
 			} else if pct, ok := parsePercent(value); ok {
 				b.Style.SVGHeightPct = pct

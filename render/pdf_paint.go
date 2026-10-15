@@ -61,7 +61,7 @@ func contentStream(pg layout.Page, opts layout.Options, imgIndex map[*images.Ras
 			fmt.Fprintf(&sb, "q %g 0 0 %g %g %g cm /Sv%d Do Q\n",
 				b.Width/b.SVG.Width, b.Height/b.SVG.Height, b.X, pdfY, svgIndex[b.SVG])
 		} else {
-			drawRuns(&sb, b, opts.PageHeight, imgIndex, fontIndex, fontSubsets, gs)
+			drawRuns(&sb, b, opts.PageHeight, imgIndex, svgIndex, fontIndex, fontSubsets, gs)
 		}
 		writeClipEnd(&sb, b)
 	}
@@ -229,7 +229,7 @@ func opacityForm(blocks []layout.PlacedBox, form opacityFormSpec, forms map[int]
 			fmt.Fprintf(&content, "q %g 0 0 %g %g %g cm /Sv%d Do Q\n",
 				inner.Width/inner.SVG.Width, inner.Height/inner.SVG.Height, inner.X, pdfY, svgIndex[inner.SVG])
 		} else {
-			drawRuns(&content, inner, opts.PageHeight, imgIndex, fontIndex, fontSubsets, gs)
+			drawRuns(&content, inner, opts.PageHeight, imgIndex, svgIndex, fontIndex, fontSubsets, gs)
 		}
 		writeClipEnd(&content, block)
 	}
@@ -386,7 +386,7 @@ func drawListMarker(sb *strings.Builder, shape string, cx, cy, fontSize, r, g, b
 }
 
 // drawRuns draws inline runs, each with its own style.
-func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex map[*images.Raster]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, gs map[float64]int) {
+func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex map[*images.Raster]int, svgIndex map[*svg.Document]int, fontIndex map[*fonts.Face]int, fontSubsets map[*fonts.Face]fonts.PDFSubset, gs map[float64]int) {
 	var lastOpaqueFill [3]float64
 	hasLastOpaqueFill := false
 	for _, ln := range b.Runs {
@@ -406,6 +406,13 @@ func drawRuns(sb *strings.Builder, b layout.PlacedBox, pageH float64, imgIndex m
 				pdfY := pageH - r.Y - r.ImageHeight
 				withAlpha(sb, r.Alpha, gs, func() {
 					fmt.Fprintf(sb, "q %g 0 0 %g %g %g cm /Im%d Do Q\n", r.Width, r.ImageHeight, r.X, pdfY, imgIndex[r.Image])
+				})
+				continue
+			}
+			if r.SVG != nil {
+				pdfY := pageH - r.Y - r.SVGHeight
+				withAlpha(sb, r.Alpha, gs, func() {
+					fmt.Fprintf(sb, "q %g 0 0 %g %g %g cm /Sv%d Do Q\n", r.Width/r.SVG.Width, r.SVGHeight/r.SVG.Height, r.X, pdfY, svgIndex[r.SVG])
 				})
 				continue
 			}

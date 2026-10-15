@@ -66,6 +66,43 @@ func TestLayout_FlexRowUsesIntrinsicBasisAndDeclaredGrowth(t *testing.T) {
 	}
 }
 
+func TestLayout_FlexInlineSVGAndTextShareLine(t *testing.T) {
+	root, err := boxes.Build(`<div style="display:flex;align-items:center;background:#29333a"><span><svg style="vertical-align:middle;width:5mm;height:5mm" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>BRAND</span><b>DOCUMENT</b></div>`)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var iconRun, brandRun *TextRun
+	blocks := Flow(root, testOptions())[0].Blocks
+	for i := range blocks {
+		for _, line := range blocks[i].Runs {
+			for j := range line {
+				run := &line[j]
+				if run.SVG != nil {
+					iconRun = run
+				}
+				if strings.Contains(run.Text, "BRAND") {
+					brandRun = run
+				}
+			}
+		}
+	}
+	if iconRun == nil || brandRun == nil {
+		t.Fatalf("expected SVG and brand text runs; icon=%v brand=%v", iconRun != nil, brandRun != nil)
+	}
+	if !approx(iconRun.Width, 72*5/25.4) || !approx(iconRun.SVGHeight, 72*5/25.4) {
+		t.Errorf("5mm SVG rendered at %v×%vpt, want %.2fpt square", iconRun.Width, iconRun.SVGHeight, 72*5/25.4)
+	}
+	if !approx(iconRun.LineY, brandRun.LineY) {
+		t.Errorf("SVG line y=%v and brand text line y=%v; inline replaced content must share its line", iconRun.LineY, brandRun.LineY)
+	}
+	if iconRun.Y >= brandRun.Y+brandRun.FontSize || brandRun.Y >= iconRun.Y+iconRun.SVGHeight {
+		t.Errorf("middle-aligned SVG y=%v h=%v and brand text y=%v h=%v do not overlap vertically", iconRun.Y, iconRun.SVGHeight, brandRun.Y, brandRun.FontSize)
+	}
+	if brandRun.X < iconRun.X+iconRun.Width {
+		t.Errorf("brand text x=%v overlaps/follows no space after SVG ending at %v", brandRun.X, iconRun.X+iconRun.Width)
+	}
+}
+
 func TestLayout_FlexBasisResolvesLengthAndPercentageAgainstContentBox(t *testing.T) {
 	root, err := boxes.Build(`<div style="display:flex;width:200pt;padding:10pt"><div style="flex:0 0 64pt;min-width:0">A</div><div style="flex:0 0 25%;min-width:0">B</div></div>`)
 	if err != nil {

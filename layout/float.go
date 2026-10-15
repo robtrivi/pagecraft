@@ -16,13 +16,22 @@ func inlineFloatChildren(box *boxes.Box) []*boxes.Box {
 	return floats
 }
 
+func hasSVGChild(box *boxes.Box) bool {
+	for _, child := range box.Children {
+		if child.SVG != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // Float wrapping (v1): a float is placed at the margin without advancing the
 // cursor (as in CSS); following content flows beside or below it through
 // wrapPlacement. Floats stackvertically (drop in Flow).
 
 // flowFloat places a float and returns it as active for wrapping.
 func flowFloat(f *boxes.Box, y float64, pages *[]Page, opts Options, usable, bottom float64) activeFloat {
-	if len(f.Children) > 0 && (hasBlockChild(f) || f.Image != nil || f.SVG != nil) {
+	if len(f.Children) > 0 && (hasBlockChild(f) || f.Image != nil || f.SVG != nil || hasSVGChild(f)) {
 		inset, _ := nestedContainerInsets(f)
 		width := usedWidth(f, usable)
 		if width > usable {

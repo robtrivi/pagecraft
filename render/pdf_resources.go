@@ -32,16 +32,19 @@ func collectAlphas(pages []layout.Page, opts layout.Options) ([]float64, map[flo
 			for _, group := range b.OpacityGroups {
 				add(group.Opacity)
 			}
-			if b.SVG != nil {
-				for _, shape := range b.SVG.Shapes {
-					if shape.HasFill {
-						add(shape.Fill[3])
-					}
-					if shape.HasStroke {
-						add(shape.Stroke[3])
+			addSVGAlphas := func(doc *svg.Document) {
+				if doc != nil {
+					for _, shape := range doc.Shapes {
+						if shape.HasFill {
+							add(shape.Fill[3])
+						}
+						if shape.HasStroke {
+							add(shape.Stroke[3])
+						}
 					}
 				}
 			}
+			addSVGAlphas(b.SVG)
 			op := 1.0
 			if b.HasOpacity {
 				op = b.Opacity
@@ -79,6 +82,7 @@ func collectAlphas(pages []layout.Page, opts layout.Options) ([]float64, map[flo
 			for _, ln := range b.Runs {
 				for _, r := range ln {
 					add(r.Alpha)
+					addSVGAlphas(r.SVG)
 				}
 			}
 		}
@@ -136,10 +140,18 @@ func collectSVGs(pages []layout.Page) ([]*svg.Document, map[*svg.Document]int) {
 	index := map[*svg.Document]int{}
 	for _, pg := range pages {
 		for _, b := range pg.Blocks {
-			if b.SVG != nil {
-				if _, ok := index[b.SVG]; !ok {
-					index[b.SVG] = len(docs) + 1
-					docs = append(docs, b.SVG)
+			add := func(doc *svg.Document) {
+				if doc != nil {
+					if _, ok := index[doc]; !ok {
+						index[doc] = len(docs) + 1
+						docs = append(docs, doc)
+					}
+				}
+			}
+			add(b.SVG)
+			for _, line := range b.Runs {
+				for _, run := range line {
+					add(run.SVG)
 				}
 			}
 		}

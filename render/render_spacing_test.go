@@ -41,7 +41,7 @@ func TestRender_LetterSpacing_RightAlignmentUsesPaintedAdvance(t *testing.T) {
 			Text: "Factura", X: 100, Width: 88.662, FontSize: 26, Bold: true, LetterSpacing: -0.75,
 		}}},
 	}
-	drawRuns(&stream, block, 842, nil, nil, nil, nil)
+	drawRuns(&stream, block, 842, nil, nil, nil, nil, nil)
 	if !strings.Contains(stream.String(), "-0.75 Tc 99.25 ") {
 		t.Errorf("right-aligned text was not shifted to match its painted width: %q", stream.String())
 	}

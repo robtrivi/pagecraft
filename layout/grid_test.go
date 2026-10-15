@@ -301,6 +301,16 @@ func TestLayout_GridItemPreservesNestedSVGAndCaption(t *testing.T) {
 		if block.SVG != nil && (block.Width == 0 || math.Abs(block.Height-130) > 0.01) {
 			t.Errorf("SVG with height:100%% must resolve the container height of 130pt; got %v×%v", block.Width, block.Height)
 		}
+		for _, line := range block.Runs {
+			for _, run := range line {
+				if run.SVG != nil {
+					hasSVG = true
+					if run.Width == 0 || math.Abs(run.SVGHeight-130) > 0.01 {
+						t.Errorf("inline SVG with height:100%% must resolve the container height of 130pt; got %v×%v", run.Width, run.SVGHeight)
+					}
+				}
+			}
+		}
 		hasCaption = hasCaption || strings.Contains(strings.Join(runLines(block), " "), "SVG CAPTION")
 	}
 	if !hasSVG || !hasCaption {

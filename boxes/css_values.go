@@ -27,7 +27,7 @@ func defaultDisplay(tag string) Display {
 		return DisplayTableCell
 	case "caption":
 		return DisplayTableCaption
-	case "span", "a", "b", "i", "em", "strong", "small", "code", "img", "of-the", "s", "strike", "sub", "sup", "u":
+	case "span", "a", "b", "i", "em", "strong", "small", "code", "img", "svg", "of-the", "s", "strike", "sub", "sup", "u":
 		return DisplayInline
 	default:
 		return DisplayBlock
