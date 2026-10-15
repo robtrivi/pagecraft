@@ -53,6 +53,23 @@ func TestRender_TableBackgroundLayersPaintInCSSOrder(t *testing.T) {
 	}
 }
 
+func TestRender_CollapsedTableBordersPaintAfterAllCellBackgrounds(t *testing.T) {
+	html := `<style>table{border-collapse:collapse}th,td{border:1px solid #123456}thead{background:#e4ebe7}tbody tr:nth-child(even){background:#f7f9f8}</style><table><thead><tr><th>Heading</th><th>Value</th></tr></thead><tbody><tr><td>First</td><td>1</td></tr><tr><td>Second</td><td>2</td></tr></tbody></table>`
+	pdf, err := RenderHTMLToPDF(html)
+	if err != nil {
+		t.Fatalf("RenderHTMLToPDF: %v", err)
+	}
+	content := streamText(t, pdf)
+	background := strings.Index(content, "0.9686274509803922 0.9764705882352941 0.9725490196078431 rg")
+	border := strings.Index(content, "0.07058823529411765 0.20392156862745098 0.33725490196078434 rg")
+	if background < 0 || border < 0 {
+		t.Fatalf("table background or collapsed border is missing; content stream:\n%s", content)
+	}
+	if background > border {
+		t.Fatalf("collapsed borders must paint after every cell background to prevent adjacent rows from covering shared edges; background offset=%d border offset=%d", background, border)
+	}
+}
+
 func TestRender_TableGroupOpacityCompositesItsCellsAndBackground(t *testing.T) {
 	pdf, err := RenderHTMLToPDF(`<table><thead style="opacity:.5;background:#163b64;color:white"><tr><th>HEAD</th><th>SECOND</th></tr></thead><tbody><tr><td>BODY</td><td>ROW</td></tr></tbody></table>`)
 	if err != nil {
